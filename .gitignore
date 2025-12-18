@@ -1,0 +1,42 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode User Data
+xcuserdata/
+*.xcodeproj
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# MultiTerm Build Output
+build/
+MultiTerm.app
+*.iconset/
+
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Claude Plans
+.claude/plans/
