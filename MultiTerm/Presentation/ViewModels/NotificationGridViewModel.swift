@@ -1,0 +1,74 @@
+import Foundation
+import Combine
+import SwiftUI
+
+class NotificationGridViewModel: ObservableObject {
+    private let sessionManager: SessionManager
+    private var cancellables = Set<AnyCancellable>()
+
+    var activeNotifications: [ClaudeNotification] {
+        sessionManager.activeNotifications
+    }
+
+    var notificationCount: Int {
+        activeNotifications.count
+    }
+
+    init(sessionManager: SessionManager = .shared) {
+        self.sessionManager = sessionManager
+
+        sessionManager.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+    }
+
+    func sessionName(for notification: ClaudeNotification) -> String {
+        sessionManager.session(for: notification.sessionId)?.name ?? "Unknown"
+    }
+
+    func respond(to notification: ClaudeNotification, with response: String) {
+        sessionManager.respondToNotification(notification.id, response: response)
+    }
+
+    func dismiss(_ notification: ClaudeNotification) {
+        sessionManager.dismissNotification(notification.id)
+    }
+
+    func markAsRead(_ notification: ClaudeNotification) {
+        sessionManager.markNotificationAsRead(notification.id)
+    }
+
+    func navigateToSession(_ notification: ClaudeNotification) {
+        sessionManager.navigateToSession(notification.sessionId)
+    }
+
+    func calculateGridLayout(count: Int, size: CGSize) -> GridLayout {
+        switch count {
+        case 1:
+            return GridLayout(columns: 1, itemHeight: size.height - 32)
+        case 2:
+            return GridLayout(columns: 2, itemHeight: size.height - 32)
+        case 3...4:
+            return GridLayout(columns: 2, itemHeight: (size.height - 48) / 2)
+        case 5...6:
+            return GridLayout(columns: 3, itemHeight: (size.height - 48) / 2)
+        case 7...9:
+            return GridLayout(columns: 3, itemHeight: (size.height - 64) / 3)
+        default:
+            let cols = Int(ceil(sqrt(Double(count))))
+            let rows = Int(ceil(Double(count) / Double(cols)))
+            return GridLayout(
+                columns: cols,
+                itemHeight: (size.height - CGFloat(rows + 1) * 16) / CGFloat(rows)
+            )
+        }
+    }
+}
+
+struct GridLayout {
+    let columns: Int
+    let itemHeight: CGFloat
+}

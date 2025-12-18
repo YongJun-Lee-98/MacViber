@@ -1,0 +1,574 @@
+# MultiTerm 개발 가이드
+
+Claude Code를 사용하여 MultiTerm을 처음부터 다시 만들 때 참고할 가이드입니다.
+
+---
+
+## 1단계: 프로젝트 초기 설정
+
+```
+macOS SwiftUI 앱 "MultiTerm"을 만들어줘.
+- Swift Package Manager 사용
+- SwiftTerm 라이브러리 의존성 추가 (https://github.com/migueldeicaza/SwiftTerm)
+- 최소 macOS 13.0 타겟
+- 앱 번들 생성용 build-app.sh 스크립트 포함
+```
+
+### 예상 디렉토리 구조
+
+```
+MultiTerm/
+├── Package.swift
+├── Scripts/
+│   └── build-app.sh
+└── MultiTerm/
+    ├── MultiTermApp.swift
+    ├── Core/
+    │   ├── Terminal/
+    │   └── Utilities/
+    ├── Domain/
+    │   ├── Models/
+    │   └── Services/
+    └── Presentation/
+        ├── Views/
+        └── ViewModels/
+```
+
+---
+
+## 2단계: 핵심 데이터 모델
+
+```
+다음 모델들을 만들어줘:
+
+1. TerminalSession
+   - id: UUID
+   - name: String
+   - workingDirectory: URL
+   - status: SessionStatus (idle, running, waitingForInput, terminated)
+   - alias: String? (사용자 지정 별칭)
+   - isLocked: Bool (잠금 상태)
+   - hasUnreadNotification: Bool
+   - lastActivity: Date
+   - displayName: 계산 속성 (alias ?? name)
+
+2. SessionStatus enum
+   - idle (회색)
+   - running (초록)
+   - waitingForInput (주황)
+   - terminated (빨강)
+
+3. SplitNode (재귀적 트리 구조)
+   - terminal(id: UUID, sessionId: UUID)
+   - split(id: UUID, direction: SplitDirection, first: SplitNode, second: SplitNode, ratio: Double)
+   - sessionId(for paneId:) 메서드로 특정 pane의 세션 조회
+
+4. SplitViewState
+   - rootNode: SplitNode?
+   - focusedPaneId: UUID?
+   - isActive, paneCount, canSplit (최대 4개), allPaneIds 계산 속성
+   - nextPaneId, previousPaneId 메서드로 pane 순환
+```
+
+---
+
+## 3단계: TerminalController (핵심)
+
+```
+SwiftTerm의 LocalProcessTerminalView를 래핑하는 TerminalController 클래스:
+
+- sessionId: UUID
+- @Published isRunning: Bool = false
+- @Published terminalView: CustomTerminalView?
+- notificationPublisher: PassthroughSubject<ClaudeNotification, Never>
+
+createTerminalView(workingDirectory: URL) 메서드:
+- 이미 생성된 view가 있으면 재사용
+- zsh 셸 프로세스 시작
+- 환경변수: TERM=xterm-256color, PWD=workingDirectory
+- 시작 후 0.1초 뒤 cd 명령으로 디렉토리 이동
+- processDelegate에서 종료 감지 시 isRunning = false 설정
+```
+
+### 핵심 코드 패턴
+
+```swift
+class CustomTerminalView: LocalProcessTerminalView {
+    var onOutput: ((String) -> Void)?
+
+    // 수동 Selection 추적 (SwiftTerm의 selection 시스템 우회)
+    private var cachedSelection: String?
+    private var mouseMonitor: Any?
+    private var selectionStart: CGPoint?
+    private var selectionEnd: CGPoint?
+    private var isDragging = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupMouseMonitor()
+    }
+
+    deinit {
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
+
+    private func setupMouseMonitor() {
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
+        ) { [weak self] event in
+            self?.handleMouseEvent(event)
+            return event
+        }
+    }
+
+    // 마우스 이벤트로 selection 범위 추적 → extractTextFromPoints에서 텍스트 추출
+    // copy() 시 cachedSelection 사용
+
+    override func copy(_ sender: Any) {
+        if let cached = cachedSelection, !cached.isEmpty {
+            let clipboard = NSPasteboard.general
+            clipboard.clearContents()
+            clipboard.setString(cached, forType: .string)
+            return
+        }
+        super.copy(sender)
+    }
+
+    override func dataReceived(slice: ArraySlice<UInt8>) {
+        super.dataReceived(slice: slice)
+        if let output = String(bytes: slice, encoding: .utf8) {
+            onOutput?(output)
+        }
+    }
+}
+```
+
+> ⚠️ **주의**: SwiftTerm의 내장 selection 시스템은 `keyDown`에서 `selection.active = false`로 초기화되어 `cmd+c` 복사 시 동작하지 않음. 수동 마우스 추적이 필수.
+
+---
+
+## 4단계: SessionManager (싱글톤)
+
+```
+SessionManager 싱글톤 클래스:
+
+@Published sessions: [TerminalSession]
+@Published selectedSessionId: UUID?
+@Published splitViewState: SplitViewState
+private controllers: [UUID: TerminalController]
+
+핵심 메서드:
+1. createSession(name:, workingDirectory:) → TerminalSession
+2. controller(for:), session(for:)
+3. closeSession, renameSession, duplicateSession
+4. setSessionAlias, toggleSessionLock
+
+Split View 관리:
+- setSplitViewRoot(_ node:)
+- setFocusedPane(_ paneId:)
+- splitPane(paneId, direction, newSessionId)
+- removePaneFromSplit(paneId)
+- updatePaneSession(paneId, newSessionId)
+- findPaneIdForSession(sessionId) → UUID?
+- swapPaneSessions(paneId1, paneId2)
+```
+
+### ⚠️ 중요: isRunning 구독 시 dropFirst() 필수
+
+```swift
+// createSession 내부
+controller.$isRunning
+    .dropFirst()  // 초기 false 값 무시 - 이게 없으면 즉시 terminated 됨!
+    .receive(on: DispatchQueue.main)
+    .sink { [weak self] isRunning in
+        self?.updateSessionStatus(session.id, isRunning: isRunning)
+    }
+    .store(in: &cancellables)
+```
+
+---
+
+## 5단계: MainViewModel
+
+```
+MainViewModel (ObservableObject):
+
+@Published selectedSessionId: UUID?
+@Published focusedPaneId: UUID?
+@Published showNotificationGrid: Bool
+@Published columnVisibility: NavigationSplitViewVisibility
+
+터미널 생성 메서드:
+- addNewTerminal() - NSOpenPanel로 폴더 선택
+- addNewTerminal(at: URL) - 특정 경로에 생성
+- addNewTerminalAtHome() - 홈 디렉토리에 생성
+
+handleTerminalSelection(sessionId):
+- Split view에서 다른 pane이 해당 세션을 이미 표시 중이면 SWAP
+- 아니면 단순 교체
+```
+
+### ⚠️ 핵심 설계 원칙 1: focusedPaneId는 항상 SessionManager 통해 설정
+
+```swift
+// ❌ 잘못된 방법 - 구독자에 의해 덮어씌워짐
+focusedPaneId = paneId
+
+// ✅ 올바른 방법
+sessionManager.setFocusedPane(paneId)
+```
+
+### ⚠️ 핵심 설계 원칙 2: NSOpenPanel 사용 전 상태 캡처
+
+```swift
+func addNewTerminal() {
+    // 모달 열기 전에 상태 캡처 (모달 중 SwiftUI 상태가 변경될 수 있음)
+    let wasInSplitView = isSplitViewActive
+    let capturedPaneId = focusedPaneId
+
+    let panel = NSOpenPanel()
+    // ... panel 설정 ...
+
+    if panel.runModal() == .OK, let url = panel.url {
+        let session = sessionManager.createSession(...)
+
+        // 캡처된 상태 사용
+        if wasInSplitView, let paneId = capturedPaneId {
+            sessionManager.updatePaneSession(paneId, newSessionId: session.id)
+        } else {
+            sessionManager.selectedSessionId = session.id
+        }
+    }
+}
+```
+
+### ⚠️ 핵심 설계 원칙 3: SWAP 로직
+
+```swift
+func handleTerminalSelection(_ sessionId: UUID) {
+    if isSplitViewActive, let paneId = focusedPaneId {
+        // 다른 pane이 이미 이 세션을 표시 중인지 확인
+        if let existingPaneId = sessionManager.findPaneIdForSession(sessionId),
+           existingPaneId != paneId {
+            // SWAP: 두 pane의 세션 교환
+            sessionManager.swapPaneSessions(paneId, existingPaneId)
+        } else {
+            // 단순 교체
+            sessionManager.updatePaneSession(paneId, newSessionId: sessionId)
+        }
+    } else {
+        navigateToSession(sessionId)
+    }
+}
+```
+
+---
+
+## 6단계: View 계층 구조
+
+```
+MainView:
+- NavigationSplitView
+  - Sidebar: TerminalListView
+  - Detail: detailContent (조건부)
+    - NotificationGridView (알림 있을 때)
+    - SplitTerminalView (split view 모드)
+    - TerminalContainerView (단일 뷰 모드)
+    - EmptyStateView (세션 없을 때)
+```
+
+### ⚠️ 중요: .id() modifier 필수
+
+```swift
+// TerminalContainerView 사용 시
+TerminalContainerView(session: session, viewModel: viewModel)
+    .id(session.id)  // SwiftUI가 NSViewRepresentable을 재사용하므로 강제 재생성 필요
+
+// TerminalPaneView 내부의 TerminalView
+TerminalView(controller: controller, workingDirectory: session.workingDirectory)
+    .id(sessionId)  // 세션 변경 시 뷰 재생성
+```
+
+### TerminalView (NSViewRepresentable)
+
+```swift
+struct TerminalView: NSViewRepresentable {
+    let controller: TerminalController
+    let workingDirectory: URL
+
+    func makeNSView(context: Context) -> NSView {
+        let containerView = NSView()
+        let terminalView = controller.createTerminalView(workingDirectory: workingDirectory)
+        // constraint 설정...
+        return containerView
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // 필요시 업데이트
+    }
+}
+```
+
+---
+
+## 7단계: 사이드바 구성
+
+```
+TerminalListView:
+- List with selection binding
+- FavoritesView 섹션
+- Terminals 섹션
+
+TerminalListItemView:
+- 상태 인디케이터 (색상 원)
+- displayName (alias 또는 name)
+- 경로 표시
+- 호버 시 잠금/닫기 버튼
+
+컨텍스트 메뉴:
+- Set Alias / Remove Alias
+- Rename
+- Duplicate
+- Lock/Unlock
+- Close (잠금 시 비활성화)
+```
+
+### Selection Binding 핵심
+
+```swift
+List(selection: Binding(
+    get: { viewModel.selectedSessionId },
+    set: { newValue in
+        if let sessionId = newValue {
+            onSelectSession?(sessionId)  // MainViewModel.handleTerminalSelection 연결
+        }
+        viewModel.selectedSessionId = newValue
+    }
+)) {
+    // ...
+}
+```
+
+---
+
+## 8단계: 즐겨찾기 시스템
+
+```
+FavoritesManager (싱글톤):
+- @Published favorites: [FavoriteFolder]
+- UserDefaults에 저장
+- add, remove, reorder 메서드
+
+FavoriteFolder:
+- id: UUID
+- url: URL
+- name: String (url.lastPathComponent)
+
+FavoritesView:
+- 즐겨찾기 목록 표시
+- 클릭 시 onOpenTerminal(url) 콜백
+- 드래그로 재정렬
+- 컨텍스트 메뉴로 삭제
+```
+
+---
+
+## 9단계: 알림 시스템 (Claude Code 연동)
+
+```
+ClaudeNotificationDetector:
+- 터미널 출력에서 Claude Code 알림 패턴 감지
+- "waiting for input", "question" 등 키워드
+
+ClaudeNotification:
+- id, sessionId, type, message, timestamp, isRead
+
+NotificationGridView:
+- 활성 알림 그리드 표시
+- 응답 입력 기능
+- 해당 세션으로 이동 버튼
+```
+
+---
+
+## 10단계: 키보드 단축키
+
+```swift
+.commands {
+    CommandGroup(replacing: .newItem) {
+        Button("New Terminal") { /* Cmd+T */ }
+    }
+    CommandGroup {
+        Button("Close Terminal") { /* Cmd+W */ }
+        Divider()
+        Button("Split Horizontal") { /* Cmd+D */ }
+        Button("Split Vertical") { /* Cmd+Shift+D */ }
+        Divider()
+        Button("Next Pane") { /* Cmd+] */ }
+        Button("Previous Pane") { /* Cmd+[ */ }
+    }
+}
+```
+
+NotificationCenter를 통해 ViewModel에 전달:
+```swift
+extension Notification.Name {
+    static let newTerminalRequested = Notification.Name("newTerminalRequested")
+    static let splitHorizontalRequested = Notification.Name("splitHorizontalRequested")
+    // ...
+}
+```
+
+---
+
+## 회피해야 할 함정들 (Lessons Learned)
+
+### 1. NSViewRepresentable 재사용 문제
+
+**증상**: 터미널 세션을 변경해도 화면이 바뀌지 않음
+
+**원인**: SwiftUI가 NSViewRepresentable을 재사용하여 updateNSView만 호출
+
+**해결**:
+```swift
+TerminalContainerView(session: session)
+    .id(session.id)  // 세션 변경 시 뷰 강제 재생성
+```
+
+### 2. @Published 초기값 구독 문제
+
+**증상**: 새 터미널이 즉시 terminated(빨간불) 상태로 표시
+
+**원인**: `@Published isRunning = false` 초기값이 구독자에게 즉시 전달됨
+
+**해결**:
+```swift
+controller.$isRunning
+    .dropFirst()  // 초기값 무시
+    .sink { ... }
+```
+
+### 3. 상태 동기화 문제
+
+**증상**: Split view 진입 후 focusedPaneId가 nil
+
+**원인**: 로컬에서 설정한 값이 SessionManager 구독자에 의해 덮어씌워짐
+
+**해결**: 항상 SessionManager 메서드를 통해 설정
+```swift
+// ❌ focusedPaneId = paneId
+// ✅ sessionManager.setFocusedPane(paneId)
+```
+
+### 4. NSOpenPanel 모달 중 상태 변경
+
+**증상**: + 버튼으로 터미널 생성 시 split view에 표시 안됨
+
+**원인**: 모달이 열려있는 동안 SwiftUI 상태가 변경될 수 있음
+
+**해결**: 모달 열기 전 필요한 상태 캡처
+```swift
+let wasInSplitView = isSplitViewActive
+let capturedPaneId = focusedPaneId
+// 이후 모달 열기...
+```
+
+### 5. Split view에서 같은 세션 중복 참조
+
+**증상**: Pane A, B가 있을 때 A에서 B의 세션 선택 시 B가 빈 화면
+
+**원인**: 두 pane이 같은 세션을 참조하게 됨
+
+**해결**: SWAP 로직 구현
+```swift
+if let existingPaneId = findPaneIdForSession(sessionId) {
+    swapPaneSessions(currentPaneId, existingPaneId)
+}
+```
+
+### 6. SwiftTerm 텍스트 복사(cmd+c) 안됨
+
+**증상**: 터미널에서 마우스로 텍스트 선택 후 `cmd+c`로 복사가 안됨
+
+**원인**: SwiftTerm의 `keyDown()` 첫 줄에서 `selection.active = false` 실행
+```swift
+// SwiftTerm/MacTerminalView.swift
+public override func keyDown(with event: NSEvent) {
+    selection.active = false  // 모든 키 입력에서 selection 초기화!
+    // ...
+}
+```
+`cmd+c` → `keyDown` 실행 → selection 비활성화 → `copy()` 호출 시 selection이 없음
+
+**해결**: NSEvent 모니터로 마우스 이벤트를 독립적으로 추적하여 수동 selection 구현
+```swift
+// 1. NSEvent.addLocalMonitorForEvents로 마우스 이벤트 캡처
+// 2. 화면 좌표 → 터미널 좌표 변환 (macOS 좌표계 반전 + yDisp 스크롤 오프셋)
+// 3. terminal.getText()로 버퍼에서 직접 텍스트 추출
+// 4. cachedSelection에 저장 후 copy()에서 사용
+```
+
+**좌표 변환 핵심**:
+```swift
+// 화면 row (0 = 맨 위)
+let screenRow = Int((bounds.height - point.y) / cellHeight)
+
+// 버퍼 row (스크롤 고려)
+let bufferRow = screenRow + terminal.buffer.yDisp
+```
+
+> 상세 내용: `docs/copy-selection-fix.md` 참조
+
+---
+
+## 빌드 스크립트 (build-app.sh)
+
+```bash
+#!/bin/bash
+
+APP_NAME="MultiTerm"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# 실행 중인 앱 종료
+if pgrep -x "$APP_NAME" > /dev/null 2>&1; then
+    pkill -x "$APP_NAME" || true
+    sleep 1
+fi
+
+# 캐시 정리
+rm -rf "$PROJECT_DIR/.build"
+rm -rf "$PROJECT_DIR/build"
+
+# 빌드
+swift build -c release
+
+# 앱 번들 생성
+mkdir -p "$PROJECT_DIR/build/$APP_NAME.app/Contents/MacOS"
+mkdir -p "$PROJECT_DIR/build/$APP_NAME.app/Contents/Resources"
+
+cp "$PROJECT_DIR/.build/release/$APP_NAME" "$PROJECT_DIR/build/$APP_NAME.app/Contents/MacOS/"
+# Info.plist, 아이콘 등 복사...
+
+# 실행
+open "$PROJECT_DIR/build/$APP_NAME.app"
+```
+
+---
+
+## 요약: 개발 순서
+
+1. **프로젝트 설정** - Package.swift, 기본 구조
+2. **모델** - TerminalSession, SplitNode, SplitViewState
+3. **TerminalController** - SwiftTerm 래핑
+4. **SessionManager** - 세션/컨트롤러 관리, Split view 상태
+5. **MainViewModel** - UI 상태 관리, 비즈니스 로직
+6. **MainView** - NavigationSplitView 구조
+7. **TerminalView** - NSViewRepresentable
+8. **SplitTerminalView** - 재귀적 분할 뷰
+9. **사이드바** - TerminalListView, FavoritesView
+10. **키보드 단축키** - Commands
+11. **알림 시스템** - Claude Code 연동
+
+각 단계에서 위의 "회피해야 할 함정들"을 참고하여 미리 대비하면 시행착오를 줄일 수 있습니다.
