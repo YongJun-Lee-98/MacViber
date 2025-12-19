@@ -8,8 +8,8 @@ set -e
 # Configuration
 APP_NAME="MultiTerm"
 BUNDLE_ID="com.multiterm.app"
-VERSION="1.0.0"
-BUILD_NUMBER="1"
+VERSION="1.1.0"
+BUILD_NUMBER="2"
 
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

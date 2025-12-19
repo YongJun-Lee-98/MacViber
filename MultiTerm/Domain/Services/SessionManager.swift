@@ -14,6 +14,7 @@ class SessionManager: ObservableObject {
     private var controllers: [UUID: TerminalController] = [:]
     private var cancellables = Set<AnyCancellable>()
     private var notificationsEnabled = false
+    private let preferencesManager = NotificationPreferencesManager.shared
 
     var unreadNotificationCount: Int {
         activeNotifications.filter { !$0.isRead }.count
@@ -128,7 +129,22 @@ class SessionManager: ObservableObject {
     // MARK: - Notification Management
 
     private func handleNotification(_ notification: ClaudeNotification) {
-        activeNotifications.append(notification)
+        let prefs = preferencesManager.preferences
+
+        // Type filter check
+        guard prefs.isTypeEnabled(notification.type) else {
+            Logger.shared.debug("Notification filtered out by type: \(notification.type.rawValue)")
+            return
+        }
+
+        // Apply auto-pin settings
+        var modifiedNotification = notification
+        if prefs.shouldAutoPin(notification.type) && !modifiedNotification.isPinned {
+            modifiedNotification.isPinned = true
+            modifiedNotification.pinnedAt = Date()
+        }
+
+        activeNotifications.append(modifiedNotification)
 
         // Update session status
         if let index = sessions.firstIndex(where: { $0.id == notification.sessionId }) {
@@ -137,11 +153,24 @@ class SessionManager: ObservableObject {
             sessions[index].lastActivity = Date()
         }
 
-        // Send system notification
-        sendSystemNotification(notification)
+        // Send system notification (if enabled)
+        if prefs.systemNotificationsEnabled {
+            sendSystemNotification(modifiedNotification)
+        }
 
-        // Play alert sound
-        NSSound.beep()
+        // Update dock badge (if enabled)
+        if prefs.dockBadgeEnabled {
+            updateDockBadge()
+        }
+    }
+
+    private func updateDockBadge() {
+        let unreadCount = activeNotifications.filter { !$0.isRead }.count
+        if unreadCount > 0 {
+            NSApp.dockTile.badgeLabel = "\(unreadCount)"
+        } else {
+            NSApp.dockTile.badgeLabel = nil
+        }
     }
 
     func markNotificationAsRead(_ notificationId: UUID) {
@@ -160,6 +189,12 @@ class SessionManager: ObservableObject {
     func dismissNotification(_ notificationId: UUID) {
         guard let notification = activeNotifications.first(where: { $0.id == notificationId }) else { return }
 
+        // Pinned notifications cannot be dismissed without unpinning first
+        if notification.isPinned {
+            Logger.shared.warning("Cannot dismiss pinned notification. Unpin first.")
+            return
+        }
+
         activeNotifications.removeAll { $0.id == notificationId }
 
         // Update session badge
@@ -167,6 +202,34 @@ class SessionManager: ObservableObject {
         if let sessionIndex = sessions.firstIndex(where: { $0.id == notification.sessionId }) {
             sessions[sessionIndex].hasUnreadNotification = hasUnread
         }
+
+        // Update dock badge
+        if preferencesManager.preferences.dockBadgeEnabled {
+            updateDockBadge()
+        }
+    }
+
+    func toggleNotificationPin(_ notificationId: UUID) {
+        guard let index = activeNotifications.firstIndex(where: { $0.id == notificationId }) else { return }
+
+        if activeNotifications[index].isPinned {
+            activeNotifications[index].isPinned = false
+            activeNotifications[index].pinnedAt = nil
+        } else {
+            activeNotifications[index].isPinned = true
+            activeNotifications[index].pinnedAt = Date()
+        }
+    }
+
+    func unpinAndDismissNotification(_ notificationId: UUID) {
+        guard let index = activeNotifications.firstIndex(where: { $0.id == notificationId }) else { return }
+
+        // Unpin first
+        activeNotifications[index].isPinned = false
+        activeNotifications[index].pinnedAt = nil
+
+        // Then dismiss
+        dismissNotification(notificationId)
     }
 
     func respondToNotification(_ notificationId: UUID, response: String) {
@@ -192,8 +255,12 @@ class SessionManager: ObservableObject {
             }
         }
 
-        // Update session badge
+        // Update session status and badge
         if let sessionIndex = sessions.firstIndex(where: { $0.id == sessionId }) {
+            // waitingForInput 상태면 running으로 변경
+            if sessions[sessionIndex].status == .waitingForInput {
+                sessions[sessionIndex].status = .running
+            }
             sessions[sessionIndex].hasUnreadNotification = false
         }
     }

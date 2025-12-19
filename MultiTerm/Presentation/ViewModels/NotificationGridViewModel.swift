@@ -10,6 +10,17 @@ class NotificationGridViewModel: ObservableObject {
         sessionManager.activeNotifications
     }
 
+    var sortedNotifications: [ClaudeNotification] {
+        activeNotifications.sorted { a, b in
+            // Pinned notifications come first
+            if a.isPinned != b.isPinned {
+                return a.isPinned
+            }
+            // Then sort by timestamp (newest first)
+            return a.timestamp > b.timestamp
+        }
+    }
+
     var notificationCount: Int {
         activeNotifications.count
     }
@@ -43,6 +54,16 @@ class NotificationGridViewModel: ObservableObject {
 
     func navigateToSession(_ notification: ClaudeNotification) {
         sessionManager.navigateToSession(notification.sessionId)
+        // 핀 알림이 아닌 경우에만 삭제
+        if !notification.isPinned {
+            sessionManager.dismissNotification(notification.id)
+        }
+        // 알림 그리드 숨기기 (터미널 포커스)
+        NotificationCenter.default.post(name: .hideNotificationGrid, object: nil)
+    }
+
+    func togglePin(_ notification: ClaudeNotification) {
+        sessionManager.toggleNotificationPin(notification.id)
     }
 
     func calculateGridLayout(count: Int, size: CGSize) -> GridLayout {

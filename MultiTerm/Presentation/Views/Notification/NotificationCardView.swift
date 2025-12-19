@@ -6,6 +6,7 @@ struct NotificationCardView: View {
     let onRespond: (String) -> Void
     let onDismiss: () -> Void
     let onNavigate: () -> Void
+    let onTogglePin: () -> Void
 
     @State private var isHovered = false
     @State private var customResponse = ""
@@ -44,8 +45,16 @@ struct NotificationCardView: View {
                 .font(.title3)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(notification.type.displayName)
-                    .font(.headline)
+                HStack(spacing: 4) {
+                    Text(notification.displayTypeName)
+                        .font(.headline)
+
+                    if notification.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
 
                 Text(sessionName)
                     .font(.caption)
@@ -66,12 +75,25 @@ struct NotificationCardView: View {
                 }
             }
 
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
+            // Pin button
+            Button(action: onTogglePin) {
+                Image(systemName: notification.isPinned ? "pin.slash" : "pin")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(notification.isPinned ? .orange : .secondary)
             }
             .buttonStyle(.plain)
+            .help(notification.isPinned ? "Unpin notification" : "Pin notification")
+
+            // Dismiss button (hidden when pinned)
+            if !notification.isPinned {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Dismiss notification")
+            }
         }
     }
 
@@ -152,9 +174,19 @@ struct NotificationCardView: View {
     private var cardBorder: some View {
         RoundedRectangle(cornerRadius: 12)
             .stroke(
-                notification.isRead ? Color.secondary.opacity(0.2) : notification.type.color.opacity(0.5),
+                borderColor,
                 lineWidth: isHovered ? 2 : 1
             )
+    }
+
+    private var borderColor: Color {
+        if notification.isPinned {
+            return .orange.opacity(0.7)
+        } else if notification.isRead {
+            return Color.secondary.opacity(0.2)
+        } else {
+            return notification.type.color.opacity(0.5)
+        }
     }
 }
 
@@ -170,7 +202,8 @@ struct NotificationCardView: View {
             sessionName: "MyProject",
             onRespond: { _ in },
             onDismiss: {},
-            onNavigate: {}
+            onNavigate: {},
+            onTogglePin: {}
         )
 
         NotificationCardView(
@@ -178,14 +211,31 @@ struct NotificationCardView: View {
                 sessionId: UUID(),
                 type: .question,
                 message: "Which database would you like to use?",
-                context: "Options: PostgreSQL, MySQL, SQLite"
+                context: "Options: PostgreSQL, MySQL, SQLite",
+                isPinned: true
             ),
             sessionName: "Backend",
             onRespond: { _ in },
             onDismiss: {},
-            onNavigate: {}
+            onNavigate: {},
+            onTogglePin: {}
+        )
+
+        NotificationCardView(
+            notification: ClaudeNotification(
+                sessionId: UUID(),
+                type: .custom,
+                message: "Build completed successfully",
+                context: "",
+                matchedPatternName: "Build Success"
+            ),
+            sessionName: "Frontend",
+            onRespond: { _ in },
+            onDismiss: {},
+            onNavigate: {},
+            onTogglePin: {}
         )
     }
     .padding()
-    .frame(width: 400, height: 500)
+    .frame(width: 400, height: 600)
 }

@@ -7,6 +7,8 @@ class ClaudeNotificationDetector {
         let type: NotificationType
     }
 
+    private let customPatternMatcher = CustomPatternMatcher()
+
     private let patterns: [Pattern] = [
         // Question patterns
         Pattern(regex: "\\?\\s*$", type: .question),
@@ -134,13 +136,44 @@ class ClaudeNotificationDetector {
             )
         }
 
+        // Check for custom pattern matches
+        if let customMatch = customPatternMatcher.match(in: cleanText) {
+            lastDetectionTime = Date()
+            let message = extractMessage(from: cleanText)
+            let context = getRecentContext()
+            let shouldAutoPin = customMatch.pattern.autoPin
+
+            return ClaudeNotification(
+                sessionId: sessionId,
+                type: .custom,
+                message: message,
+                context: context,
+                isPinned: shouldAutoPin,
+                pinnedAt: shouldAutoPin ? Date() : nil,
+                matchedPatternId: customMatch.pattern.id,
+                matchedPatternName: customMatch.pattern.name
+            )
+        }
+
         return nil
     }
 
     private func stripANSI(_ text: String) -> String {
-        let pattern = "\u{001B}\\[[0-9;]*[A-Za-z]"
+        // 포괄적인 ANSI/터미널 제어 시퀀스 패턴
+        let patterns = [
+            "\u{001B}\\[[0-9;]*[A-Za-z]",           // 기본 CSI 시퀀스 (색상, 커서 등)
+            "\u{001B}\\[\\?[0-9;]*[A-Za-z]",        // DEC Private Mode (?포함)
+            "\u{001B}\\[[0-9;]*[>=<]",              // DA 및 기타 제어
+            "\u{001B}\\].*?\u{0007}",               // OSC 시퀀스 (BEL로 종료)
+            "\u{001B}\\].*?\u{001B}\\\\",           // OSC 시퀀스 (ST로 종료)
+            "\u{001B}[()][AB012]",                  // 문자셋 지정
+            "\u{001B}=",                            // Application Keypad Mode
+            "\u{001B}>",                            // Normal Keypad Mode
+        ]
+        let combined = patterns.joined(separator: "|")
+
         do {
-            let regex = try NSRegularExpression(pattern: pattern)
+            let regex = try NSRegularExpression(pattern: combined)
             let range = NSRange(text.startIndex..., in: text)
             return regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
         } catch {
@@ -237,9 +270,9 @@ class ClaudeNotificationDetector {
     }
 
     private func getRecentContext() -> String {
-        let lines = outputBuffer.components(separatedBy: .newlines)
-        let recentLines = lines.suffix(10)
-        return recentLines.joined(separator: "\n")
+        // 원시 터미널 버퍼는 키 입력 에코, 백스페이스 등 노이즈가 많아 context 비활성화
+        // message 필드가 핵심 정보를 이미 제공함
+        return ""
     }
 
     func reset() {

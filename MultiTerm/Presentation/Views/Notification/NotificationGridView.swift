@@ -41,7 +41,7 @@ struct NotificationGridView: View {
                 columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: layout.columns),
                 spacing: 12
             ) {
-                ForEach(viewModel.activeNotifications) { notification in
+                ForEach(viewModel.sortedNotifications) { notification in
                     NotificationCardView(
                         notification: notification,
                         sessionName: viewModel.sessionName(for: notification),
@@ -53,6 +53,9 @@ struct NotificationGridView: View {
                         },
                         onNavigate: {
                             viewModel.navigateToSession(notification)
+                        },
+                        onTogglePin: {
+                            viewModel.togglePin(notification)
                         }
                     )
                     .frame(minHeight: min(layout.itemHeight, 200))

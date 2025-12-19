@@ -13,6 +13,7 @@ class MainViewModel: ObservableObject {
     private let sessionManager: SessionManager
     private var cancellables = Set<AnyCancellable>()
     private var isUpdatingFromSessionManager = false
+    private var previousNotificationCount: Int = 0
 
     var selectedSession: TerminalSession? {
         guard let id = selectedSessionId else { return nil }
@@ -89,15 +90,19 @@ class MainViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Auto-show notification grid when notifications arrive
+        // Auto-show notification grid only when NEW notifications arrive
+        previousNotificationCount = sessionManager.activeNotifications.count
         sessionManager.$activeNotifications
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notifications in
-                if !notifications.isEmpty && self?.showNotificationGrid == false {
+                guard let self = self else { return }
+                // 새로운 알림이 추가되었을 때만 auto-show (개수 증가 시)
+                if notifications.count > self.previousNotificationCount && !self.showNotificationGrid {
                     withAnimation {
-                        self?.showNotificationGrid = true
+                        self.showNotificationGrid = true
                     }
                 }
+                self.previousNotificationCount = notifications.count
             }
             .store(in: &cancellables)
 
@@ -158,6 +163,14 @@ class MainViewModel: ObservableObject {
         NotificationCenter.default.publisher(for: .showKeyboardShortcuts)
             .sink { [weak self] _ in
                 self?.showKeyboardShortcuts = true
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .hideNotificationGrid)
+            .sink { [weak self] _ in
+                withAnimation {
+                    self?.showNotificationGrid = false
+                }
             }
             .store(in: &cancellables)
     }

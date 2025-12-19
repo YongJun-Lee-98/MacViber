@@ -8,6 +8,7 @@ struct MultiTermApp: App {
     @State private var showingShortcuts = false
     @State private var showingThemePicker = false
     @State private var showingColorSettings = false
+    @State private var showingNotificationSettings = false
 
     init() {
         Logger.shared.info("MultiTerm app started")
@@ -26,11 +27,17 @@ struct MultiTermApp: App {
                 .sheet(isPresented: $showingColorSettings) {
                     ColorSettingsView()
                 }
+                .sheet(isPresented: $showingNotificationSettings) {
+                    NotificationSettingsView()
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .showThemePicker)) { _ in
                     showingThemePicker = true
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .showColorSettings)) { _ in
                     showingColorSettings = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .showNotificationSettings)) { _ in
+                    showingNotificationSettings = true
                 }
         }
         .windowStyle(.titleBar)
@@ -89,11 +96,8 @@ struct MultiTermApp: App {
                 .keyboardShortcut("a", modifiers: .command)
             }
 
-            // View menu with Theme selection
-            CommandMenu("View") {
-                Text("Theme")
-                    .font(.caption)
-
+            // Theme menu
+            CommandMenu("Theme") {
                 ForEach(TerminalTheme.allThemes) { theme in
                     Button {
                         ThemeManager.shared.selectTheme(theme)
@@ -117,6 +121,14 @@ struct MultiTermApp: App {
                     NotificationCenter.default.post(name: .showColorSettings, object: nil)
                 }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
+            }
+
+            // Settings menu
+            CommandMenu("Settings") {
+                Button("Notification Settings...") {
+                    NotificationCenter.default.post(name: .showNotificationSettings, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             }
 
             CommandGroup(replacing: .help) {
@@ -154,6 +166,8 @@ extension Notification.Name {
     static let showKeyboardShortcuts = Notification.Name("showKeyboardShortcuts")
     static let showThemePicker = Notification.Name("showThemePicker")
     static let showColorSettings = Notification.Name("showColorSettings")
+    static let showNotificationSettings = Notification.Name("showNotificationSettings")
+    static let hideNotificationGrid = Notification.Name("hideNotificationGrid")
 }
 
 // MARK: - Keyboard Shortcuts View
