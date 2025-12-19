@@ -158,6 +158,17 @@ struct MultiTermApp: App {
                     let logURL = URL(fileURLWithPath: logPath)
                     NSWorkspace.shared.selectFile(logPath, inFileViewerRootedAtPath: logURL.deletingLastPathComponent().path)
                 }
+
+                Divider()
+
+                Button("Open Source Licenses") {
+                    let projectPath = URL(fileURLWithPath: #file)
+                        .deletingLastPathComponent()
+                        .deletingLastPathComponent()
+                        .deletingLastPathComponent()
+                        .appendingPathComponent("docs/LICENSES.md")
+                    NSWorkspace.shared.open(projectPath)
+                }
             }
         }
     }

@@ -572,3 +572,245 @@ open "$PROJECT_DIR/build/$APP_NAME.app"
 11. **알림 시스템** - Claude Code 연동
 
 각 단계에서 위의 "회피해야 할 함정들"을 참고하여 미리 대비하면 시행착오를 줄일 수 있습니다.
+
+---
+
+## 11단계: Notes 사이드바
+
+```
+오른쪽 사이드바에 Markdown 노트 기능 추가:
+
+NoteManager (싱글톤):
+- @Published note: Note
+- 파일 저장 위치: ~/Library/Application Support/MultiTerm/note.md
+- load(), save() 메서드
+
+NoteViewModel:
+- @Published selectedTab: Tab (.edit, .preview)
+- @Published content: String
+- saveNote() 메서드 (수동 저장)
+
+RightSidebarView:
+- Header: "Notes" + Edit/Preview Picker
+- Content: MarkdownEditorView / MarkdownPreviewView
+- Footer: Save 버튼 + 저장 성공 메시지
+```
+
+### 핵심 코드 패턴
+
+```swift
+// RightSidebarView - 저장 버튼과 피드백
+@State private var showSavedMessage = false
+
+Button(action: {
+    viewModel.saveNote()
+    withAnimation { showSavedMessage = true }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        withAnimation { showSavedMessage = false }
+    }
+}) {
+    HStack(spacing: 4) {
+        Image(systemName: "square.and.arrow.down")
+        Text("Save")
+    }
+}
+.buttonStyle(.borderedProminent)
+```
+
+> ⚠️ **주의**: 자동 저장은 CPU 사용량 문제를 일으킬 수 있음. 수동 저장 권장.
+
+---
+
+## 12단계: CPU 최적화 패턴
+
+### 1. 정규식 캐싱 (필수)
+
+```swift
+// ❌ 잘못된 방법 - 매번 컴파일
+func detect(in text: String) {
+    for pattern in patterns {
+        let regex = try NSRegularExpression(pattern: pattern)  // CPU 낭비!
+    }
+}
+
+// ✅ 올바른 방법 - static let으로 한 번만 컴파일
+private static let cachedPatterns: [CachedPattern] = {
+    let definitions: [(String, NotificationType)] = [
+        ("\\?\\s*$", .question),
+        // ...
+    ]
+    return definitions.compactMap { (pattern, type) in
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+        return CachedPattern(regex: regex, type: type)
+    }
+}()
+```
+
+### 2. 마우스 드래그 쓰로틀링
+
+```swift
+// 마우스 드래그 이벤트는 초당 100+회 발생할 수 있음
+private var lastDragTime: Date?
+private let dragThrottleInterval: TimeInterval = 0.016  // ~60fps
+
+case .leftMouseDragged:
+    let now = Date()
+    if let lastTime = lastDragTime, now.timeIntervalSince(lastTime) < dragThrottleInterval {
+        return  // 이벤트 무시
+    }
+    lastDragTime = now
+    // 처리 로직...
+```
+
+### 3. 터미널 출력 버퍼링
+
+```swift
+// ❌ 매 바이트마다 처리
+override func dataReceived(slice: ArraySlice<UInt8>) {
+    super.dataReceived(slice: slice)
+    if let output = String(bytes: slice, encoding: .utf8) {
+        onOutput?(output)  // CPU 낭비!
+    }
+}
+
+// ✅ 버퍼링 후 일정 간격으로 처리
+private var outputBuffer: [UInt8] = []
+private var outputFlushTask: DispatchWorkItem?
+private let outputFlushDelay: TimeInterval = 0.05
+
+override func dataReceived(slice: ArraySlice<UInt8>) {
+    super.dataReceived(slice: slice)
+    outputBuffer.append(contentsOf: slice)
+
+    outputFlushTask?.cancel()
+    outputFlushTask = DispatchWorkItem { [weak self] in
+        self?.flushOutputBuffer()
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + outputFlushDelay, execute: outputFlushTask!)
+}
+```
+
+### 4. objectWillChange 디바운싱
+
+```swift
+// ❌ 즉시 전파
+sessionManager.objectWillChange
+    .receive(on: DispatchQueue.main)
+    .sink { [weak self] _ in
+        self?.objectWillChange.send()
+    }
+
+// ✅ 디바운싱 적용
+sessionManager.objectWillChange
+    .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
+    .sink { [weak self] _ in
+        self?.objectWillChange.send()
+    }
+```
+
+### 5. display() 호출 제거
+
+```swift
+// ❌ 동기 강제 리드로우
+termView.needsDisplay = true
+termView.display()  // 블로킹!
+
+// ✅ 시스템에 맡기기
+termView.needsDisplay = true
+// display() 제거 - 시스템이 최적 타이밍에 렌더링
+```
+
+---
+
+## 빌드 및 설치 스크립트
+
+### build-app.sh (테스트 빌드)
+
+```bash
+#!/bin/bash
+APP_NAME="MultiTerm"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# 기존 앱 종료
+pkill -x "$APP_NAME" 2>/dev/null || true
+sleep 1
+
+# 빌드
+swift build -c release
+
+# 앱 번들 생성
+mkdir -p "$PROJECT_DIR/build/$APP_NAME.app/Contents/MacOS"
+cp "$PROJECT_DIR/.build/release/$APP_NAME" "$PROJECT_DIR/build/$APP_NAME.app/Contents/MacOS/"
+
+# 실행
+open "$PROJECT_DIR/build/$APP_NAME.app"
+```
+
+### install-app.sh (프로덕션 설치)
+
+```bash
+#!/bin/bash
+APP_NAME="MultiTerm"
+
+# Production/Test 모드 선택
+if [[ "$1" == "--test" ]]; then
+    INSTALL_MODE="TEST"
+else
+    INSTALL_MODE="PRODUCTION"
+fi
+
+# 기존 앱 종료 및 제거
+pkill -x "$APP_NAME" 2>/dev/null
+rm -rf "/Applications/$APP_NAME.app"
+
+# 설치
+cp -R "build/$APP_NAME.app" "/Applications/"
+
+echo "✅ $APP_NAME.app installed to /Applications"
+```
+
+---
+
+## 추가된 회피해야 할 함정들
+
+### 7. 자동 저장 CPU 문제
+
+**증상**: Notes 편집 시 CPU 사용량이 높음
+
+**원인**: 매 키 입력마다 debounced save Task 생성/취소
+
+**해결**: 자동 저장 제거, 수동 Save 버튼 사용
+
+### 8. 정규식 반복 컴파일
+
+**증상**: 터미널 출력 처리 시 CPU 100%
+
+**원인**: 매 출력마다 NSRegularExpression 새로 컴파일
+
+**해결**: `static let`으로 정규식 캐싱
+
+### 9. display() 강제 호출
+
+**증상**: 테마 변경 시 UI 버벅임
+
+**원인**: `display()` 동기 호출로 메인 스레드 블로킹
+
+**해결**: `needsDisplay = true`만 사용, `display()` 제거
+
+---
+
+## 요약: 개발 순서 (업데이트)
+
+1. **프로젝트 설정** - Package.swift, 기본 구조
+2. **모델** - TerminalSession, SplitNode, SplitViewState
+3. **TerminalController** - SwiftTerm 래핑
+4. **SessionManager** - 세션/컨트롤러 관리, Split view 상태
+5. **MainViewModel** - UI 상태 관리, 비즈니스 로직
+6. **MainView** - NavigationSplitView 구조
+7. **TerminalView** - NSViewRepresentable
+8. **SplitTerminalView** - 재귀적 분할 뷰
+9. **사이드바** - TerminalListView, FavoritesView
+10. **키보드 단축키** - Commands
+11. **알림 시스템** - Claude Code 연동, CustomPattern
+12. **Notes 사이드바** - Markdown 편집/미리보기
+13. **CPU 최적화** - 정규식 캐싱, 쓰로틀링, 버퍼링

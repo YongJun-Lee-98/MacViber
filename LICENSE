@@ -29,12 +29,33 @@ This software uses the following third-party libraries:
 ### SwiftTerm
 - License: MIT License
 - Copyright: (c) 2019-2022 Miguel de Icaza and contributors
+- Repository: https://github.com/migueldeicaza/SwiftTerm
 - Full license: See docs/LICENSES.md or LocalPackages/SwiftTerm/LICENSE
 
-### swift-argument-parser
-- License: Apache License 2.0
-- Copyright: Copyright (c) 2020 Apple Inc. and the Swift project authors
+### swift-markdown-ui
+- License: MIT License
+- Copyright: (c) 2020 Guillermo Gonzalez
+- Repository: https://github.com/gonzalezreal/swift-markdown-ui
 - Full license: See docs/LICENSES.md
-- Repository: https://github.com/apple/swift-argument-parser
 
-For complete license texts and obligations, see docs/LICENSES.md.
+### NetworkImage (transitive)
+- License: MIT License
+- Copyright: (c) 2020 Guille Gonzalez
+- Repository: https://github.com/gonzalezreal/NetworkImage
+- Full license: See docs/LICENSES.md
+
+### swift-cmark (transitive)
+- License: BSD 2-Clause License + MIT (components)
+- Copyright: (c) 2014 John MacFarlane
+- Repository: https://github.com/swiftlang/swift-cmark
+- Full license: See docs/LICENSES.md
+
+### swift-argument-parser (transitive)
+- License: Apache License 2.0 (with Runtime Exception)
+- Copyright: (c) 2020 Apple Inc. and the Swift project authors
+- Repository: https://github.com/apple/swift-argument-parser
+- Full license: See docs/LICENSES.md
+
+---
+
+For complete license texts and redistribution obligations, see docs/LICENSES.md.
