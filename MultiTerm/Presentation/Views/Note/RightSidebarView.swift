@@ -80,7 +80,7 @@ struct RightSidebarView: View {
             .padding(.vertical, 8)
             .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(minWidth: 200, idealWidth: 300, maxWidth: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 }

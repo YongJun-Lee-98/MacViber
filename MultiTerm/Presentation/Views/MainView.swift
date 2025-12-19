@@ -4,6 +4,7 @@ struct MainView: View {
     @EnvironmentObject var sessionManager: SessionManager
     @StateObject private var viewModel = MainViewModel()
     @StateObject private var terminalListViewModel = TerminalListViewModel()
+    @State private var sidebarWidth: CGFloat = 200
 
     var body: some View {
         NavigationSplitView(columnVisibility: $viewModel.columnVisibility) {
@@ -23,11 +24,13 @@ struct MainView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 300)
         } detail: {
             // Main Area: Notification Grid or Terminal View + Right Sidebar
-            HSplitView {
+            HStack(spacing: 0) {
                 detailContent
 
                 if viewModel.showRightSidebar {
-                    RightSidebarView()
+                    ResizableSidebar(width: $sidebarWidth, minWidth: 150, maxWidth: 600) {
+                        RightSidebarView()
+                    }
                 }
             }
         }
