@@ -33,30 +33,21 @@ struct TerminalView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: TerminalContainerNSView, context: Context) {
-        // Apply theme/custom color changes to container background
         let theme = themeManager.currentTheme
         let effectiveBg = themeManager.effectiveBackgroundColor
         let effectiveFg = themeManager.effectiveForegroundColor
 
-        Logger.shared.debug("[THEME] updateNSView called, theme: \(theme.name), effectiveFg: \(effectiveFg)")
         nsView.layer?.backgroundColor = effectiveBg.cgColor
 
         // Apply colors to terminal view
         // Order matters: ANSI colors first, then background, then foreground last
         if let terminalView = nsView.terminalView as? CustomTerminalView {
-            Logger.shared.debug("[THEME] Applying colors to terminalView (id: \(ObjectIdentifier(terminalView)))")
             terminalView.installColors(theme.ansiSwiftTermColors)
             terminalView.nativeBackgroundColor = effectiveBg
             terminalView.nativeForegroundColor = effectiveFg
 
-            // Verify the value was set
-            Logger.shared.debug("[THEME] After setting, nativeForegroundColor = \(terminalView.nativeForegroundColor)")
-
-            // Force immediate redraw (not just scheduling)
+            // Request redraw on next display cycle (avoid synchronous forced redraw)
             terminalView.needsDisplay = true
-            terminalView.display()
-        } else {
-            Logger.shared.debug("[THEME] terminalView is nil or not CustomTerminalView")
         }
 
         // Ensure terminal is first responder when view updates

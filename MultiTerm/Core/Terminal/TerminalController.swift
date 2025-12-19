@@ -32,7 +32,7 @@ class TerminalController: ObservableObject {
 
     private func setupColorsObserver() {
         colorsSubscription = ThemeManager.shared.colorsChanged
-            .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.applyColors()
             }
@@ -52,9 +52,8 @@ class TerminalController: ObservableObject {
         termView.nativeBackgroundColor = effectiveBg
         termView.nativeForegroundColor = effectiveFg
 
-        // Force immediate redraw
+        // Request redraw on next display cycle (avoid synchronous forced redraw)
         termView.needsDisplay = true
-        termView.display()
     }
 
     func applyTheme(_ theme: TerminalTheme) {
@@ -196,6 +195,15 @@ class CustomTerminalView: LocalProcessTerminalView {
     private var selectionEnd: CGPoint?
     private var isDragging = false
 
+    // Mouse drag throttling (16ms = ~60fps)
+    private var lastDragTime: Date?
+    private let dragThrottleInterval: TimeInterval = 0.016
+
+    // Output buffering for reduced CPU usage
+    private var outputBuffer: [UInt8] = []
+    private var outputFlushTask: DispatchWorkItem?
+    private let outputFlushDelay: TimeInterval = 0.05
+
     // IME (Korean input) support
     private var markedTextString: String = ""
 
@@ -234,9 +242,17 @@ class CustomTerminalView: LocalProcessTerminalView {
             selectionStart = localPoint
             selectionEnd = localPoint
             cachedSelection = nil
+            lastDragTime = nil
 
         case .leftMouseDragged:
             guard isDragging else { return }
+
+            // Throttle drag events to reduce CPU usage (~60fps)
+            let now = Date()
+            if let lastTime = lastDragTime, now.timeIntervalSince(lastTime) < dragThrottleInterval {
+                return
+            }
+            lastDragTime = now
             selectionEnd = localPoint
 
         case .leftMouseUp:
@@ -330,10 +346,24 @@ class CustomTerminalView: LocalProcessTerminalView {
     override func dataReceived(slice: ArraySlice<UInt8>) {
         super.dataReceived(slice: slice)
 
-        // Capture output for notification detection
-        if let output = String(bytes: slice, encoding: .utf8) {
+        // Buffer output and flush periodically to reduce CPU usage
+        outputBuffer.append(contentsOf: slice)
+
+        // Cancel pending flush and schedule a new one
+        outputFlushTask?.cancel()
+        outputFlushTask = DispatchWorkItem { [weak self] in
+            self?.flushOutputBuffer()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + outputFlushDelay, execute: outputFlushTask!)
+    }
+
+    private func flushOutputBuffer() {
+        guard !outputBuffer.isEmpty else { return }
+
+        if let output = String(bytes: outputBuffer, encoding: .utf8) {
             onOutput?(output)
         }
+        outputBuffer.removeAll(keepingCapacity: true)
     }
 
     // MARK: - NSTextInputClient Override (Korean IME Support)

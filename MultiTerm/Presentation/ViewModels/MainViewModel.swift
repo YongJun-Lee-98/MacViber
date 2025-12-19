@@ -83,9 +83,9 @@ class MainViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Subscribe to sessions changes to ensure UI updates
+        // Subscribe to sessions changes to ensure UI updates (debounced to reduce CPU)
         sessionManager.$sessions
-            .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }
@@ -107,9 +107,9 @@ class MainViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Forward split view state changes to trigger UI updates
+        // Forward split view state changes to trigger UI updates (debounced)
         sessionManager.$splitViewState
-            .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
             .sink { [weak self] state in
                 self?.focusedPaneId = state.focusedPaneId
                 self?.objectWillChange.send()

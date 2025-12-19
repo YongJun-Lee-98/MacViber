@@ -6,12 +6,34 @@ class NotificationGridViewModel: ObservableObject {
     private let sessionManager: SessionManager
     private var cancellables = Set<AnyCancellable>()
 
+    // Cached sorted notifications to avoid re-sorting on every render
+    @Published private(set) var sortedNotifications: [ClaudeNotification] = []
+
     var activeNotifications: [ClaudeNotification] {
         sessionManager.activeNotifications
     }
 
-    var sortedNotifications: [ClaudeNotification] {
-        activeNotifications.sorted { a, b in
+    var notificationCount: Int {
+        sortedNotifications.count
+    }
+
+    init(sessionManager: SessionManager = .shared) {
+        self.sessionManager = sessionManager
+
+        // Debounce objectWillChange to reduce CPU usage
+        sessionManager.objectWillChange
+            .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateSortedNotifications()
+            }
+            .store(in: &cancellables)
+
+        // Initial sort
+        updateSortedNotifications()
+    }
+
+    private func updateSortedNotifications() {
+        let newSorted = activeNotifications.sorted { a, b in
             // Pinned notifications come first
             if a.isPinned != b.isPinned {
                 return a.isPinned
@@ -19,21 +41,11 @@ class NotificationGridViewModel: ObservableObject {
             // Then sort by timestamp (newest first)
             return a.timestamp > b.timestamp
         }
-    }
 
-    var notificationCount: Int {
-        activeNotifications.count
-    }
-
-    init(sessionManager: SessionManager = .shared) {
-        self.sessionManager = sessionManager
-
-        sessionManager.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
+        // Only update if changed to avoid unnecessary view updates
+        if newSorted.map(\.id) != sortedNotifications.map(\.id) {
+            sortedNotifications = newSorted
+        }
     }
 
     func sessionName(for notification: ClaudeNotification) -> String {

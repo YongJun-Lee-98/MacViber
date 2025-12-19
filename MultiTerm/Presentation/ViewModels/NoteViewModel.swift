@@ -17,16 +17,7 @@ class NoteViewModel: ObservableObject {
         self.noteManager = noteManager
         self.content = noteManager.note.content
 
-        // Sync content changes to NoteManager with debounced save
-        $content
-            .dropFirst() // Skip initial value
-            .removeDuplicates()
-            .sink { [weak self] newContent in
-                self?.noteManager.updateContent(newContent)
-            }
-            .store(in: &cancellables)
-
-        // Listen for external note changes
+        // Listen for external note changes (e.g., after save or reload)
         noteManager.$note
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in
@@ -36,5 +27,11 @@ class NoteViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    /// Manual save - call this when the user clicks the save button
+    func saveNote() {
+        noteManager.note.content = content
+        noteManager.save()
     }
 }

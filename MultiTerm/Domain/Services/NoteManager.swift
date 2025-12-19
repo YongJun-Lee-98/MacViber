@@ -7,7 +7,6 @@ class NoteManager: ObservableObject {
     @Published var note: Note
 
     private let fileURL: URL
-    private var saveTask: Task<Void, Never>?
 
     private init() {
         // ~/Library/Application Support/MultiTerm/note.md
@@ -46,22 +45,5 @@ class NoteManager: ObservableObject {
         } catch {
             Logger.shared.error("Failed to save note: \(error)")
         }
-    }
-
-    /// Debounced save - waits for 1 second of inactivity before saving
-    func scheduleSave() {
-        saveTask?.cancel()
-        saveTask = Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self.save()
-            }
-        }
-    }
-
-    func updateContent(_ content: String) {
-        note.content = content
-        scheduleSave()
     }
 }

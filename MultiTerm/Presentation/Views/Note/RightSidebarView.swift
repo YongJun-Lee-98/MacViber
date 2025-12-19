@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RightSidebarView: View {
     @StateObject private var viewModel = NoteViewModel()
+    @State private var showSavedMessage = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +38,47 @@ struct RightSidebarView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Save button footer
+            Divider()
+            HStack {
+                // Saved message
+                if showSavedMessage {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Saved")
+                            .foregroundColor(.secondary)
+                    }
+                    .font(.caption)
+                    .transition(.opacity)
+                }
+
+                Spacer()
+
+                Button(action: {
+                    viewModel.saveNote()
+                    withAnimation {
+                        showSavedMessage = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation {
+                            showSavedMessage = false
+                        }
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.arrow.down")
+                        Text("Save")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(minWidth: 200, idealWidth: 300, maxWidth: 600)
         .background(Color(nsColor: .windowBackgroundColor))

@@ -2,73 +2,125 @@ import Foundation
 
 class ClaudeNotificationDetector {
 
-    private struct Pattern {
-        let regex: String
+    // MARK: - Cached Pattern Structure
+    private struct CachedPattern {
+        let regex: NSRegularExpression
         let type: NotificationType
     }
 
     private let customPatternMatcher = CustomPatternMatcher()
 
-    private let patterns: [Pattern] = [
-        // Question patterns
-        Pattern(regex: "\\?\\s*$", type: .question),
-        Pattern(regex: "\\(y/n\\)", type: .question),
-        Pattern(regex: "\\[Y/n\\]", type: .question),
-        Pattern(regex: "\\[yes/no\\]", type: .question),
-        Pattern(regex: "Press Enter to continue", type: .question),
-        Pattern(regex: "Enter your choice", type: .question),
+    // MARK: - Pre-compiled Regex Patterns (static for one-time compilation)
 
-        // Permission request patterns (Claude Code specific)
-        Pattern(regex: "Allow\\s+.*\\?", type: .permissionRequest),
-        Pattern(regex: "Do you want to", type: .permissionRequest),
-        Pattern(regex: "Proceed\\?", type: .permissionRequest),
-        // More specific patterns with word boundaries
-        Pattern(regex: "\\b(approve|deny)\\b", type: .permissionRequest),
-        Pattern(regex: "(approve or deny)", type: .permissionRequest),
-        Pattern(regex: "\\(approve/deny\\)", type: .permissionRequest),
-        Pattern(regex: "\\[approve\\|deny\\]", type: .permissionRequest),
+    /// Main detection patterns - compiled once at class load
+    private static let cachedPatterns: [CachedPattern] = {
+        let definitions: [(String, NotificationType)] = [
+            // Question patterns
+            ("\\?\\s*$", .question),
+            ("\\(y/n\\)", .question),
+            ("\\[Y/n\\]", .question),
+            ("\\[yes/no\\]", .question),
+            ("Press Enter to continue", .question),
+            ("Enter your choice", .question),
 
-        // Completion patterns
-        Pattern(regex: "✓.*completed", type: .completion),
-        Pattern(regex: "Done\\.", type: .completion),
-        Pattern(regex: "Successfully", type: .completion),
-        Pattern(regex: "finished", type: .completion),
+            // Permission request patterns (Claude Code specific)
+            ("Allow\\s+.*\\?", .permissionRequest),
+            ("Do you want to", .permissionRequest),
+            ("Proceed\\?", .permissionRequest),
+            ("\\b(approve|deny)\\b", .permissionRequest),
+            ("(approve or deny)", .permissionRequest),
+            ("\\(approve/deny\\)", .permissionRequest),
+            ("\\[approve\\|deny\\]", .permissionRequest),
 
-        // Error patterns
-        Pattern(regex: "Error:", type: .error),
-        Pattern(regex: "Failed:", type: .error),
-        Pattern(regex: "✗", type: .error),
-        Pattern(regex: "FAILED", type: .error),
-    ]
+            // Completion patterns
+            ("✓.*completed", .completion),
+            ("Done\\.", .completion),
+            ("Successfully", .completion),
+            ("finished", .completion),
 
-    private let claudePromptPatterns: [String] = [
-        "❯",
-        "claude>",
-        "\\[Claude\\]",
-        ">>> ",
-        "\\.\\.\\. ",
-    ]
+            // Error patterns
+            ("Error:", .error),
+            ("Failed:", .error),
+            ("✗", .error),
+            ("FAILED", .error),
+        ]
+
+        return definitions.compactMap { (pattern, type) in
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+                Logger.shared.error("Failed to compile pattern: \(pattern)")
+                return nil
+            }
+            return CachedPattern(regex: regex, type: type)
+        }
+    }()
+
+    /// Claude prompt patterns - compiled once
+    private static let claudePromptRegexes: [NSRegularExpression] = {
+        let patterns = [
+            "❯",
+            "claude>",
+            "\\[Claude\\]",
+            ">>> ",
+            "\\.\\.\\. ",
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }()
+
+    /// Slash command menu patterns - compiled once
+    private static let slashCommandRegexes: [NSRegularExpression] = {
+        let patterns = [
+            "\\[3C\\[1B",
+            "\\[17C",
+            "\\[\\d+C\\[1B",
+            "\\[94m.*\\[39m",
+            "\\[37m.*\\[39m",
+            "(\\[3C\\[1B.*){2,}",
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }()
+
+    /// Permission indicators - compiled once
+    private static let permissionRegexes: [NSRegularExpression] = {
+        let indicators = [
+            "allow",
+            "permission",
+            "access",
+            "proceed",
+            "continue",
+            "confirm",
+            "\\?",
+            "do you want",
+            "would you like",
+            "may i",
+            "can i",
+        ]
+        return indicators.compactMap { try? NSRegularExpression(pattern: $0, options: .caseInsensitive) }
+    }()
+
+    /// ANSI strip regex - compiled once
+    private static let ansiStripRegex: NSRegularExpression? = {
+        let patterns = [
+            "\u{001B}\\[[0-9;]*[A-Za-z]",
+            "\u{001B}\\[\\?[0-9;]*[A-Za-z]",
+            "\u{001B}\\[[0-9;]*[>=<]",
+            "\u{001B}\\].*?\u{0007}",
+            "\u{001B}\\].*?\u{001B}\\\\",
+            "\u{001B}[()][AB012]",
+            "\u{001B}=",
+            "\u{001B}>",
+        ]
+        return try? NSRegularExpression(pattern: patterns.joined(separator: "|"))
+    }()
+
+    // MARK: - Instance Properties
 
     private var lastDetectionTime: Date?
     private let debounceInterval: TimeInterval = 0.5
     private var outputBuffer: String = ""
     private let bufferMaxSize = 10000
-    private var lastMatchedKey: String?  // 중복 알림 방지용
+    private var lastMatchedKey: String?
 
-    // ANSI patterns that indicate slash command menu display
-    private let slashCommandMenuPatterns: [String] = [
-        // Cursor movement patterns common in interactive menus
-        "\\[3C\\[1B",           // Move right 3, down 1 (typical menu navigation)
-        "\\[17C",               // Move right 17 (column alignment in menu)
-        "\\[\\d+C\\[1B",        // Generic: move right N, down 1
-
-        // Color patterns for menu items
-        "\\[94m.*\\[39m",       // Blue text (94m) reset (39m) - menu highlights
-        "\\[37m.*\\[39m",       // White text - menu items
-
-        // Multiple consecutive lines with same pattern (menu structure)
-        "(\\[3C\\[1B.*){2,}",   // At least 2 lines with this pattern
-    ]
+    // MARK: - Public Methods
 
     func appendOutput(_ text: String) {
         outputBuffer += text
@@ -95,46 +147,39 @@ class ClaudeNotificationDetector {
         // Strip ANSI escape sequences for pattern matching
         let cleanText = stripANSI(text)
 
-        // Pattern matching
-        for pattern in patterns {
-            do {
-                let regex = try NSRegularExpression(pattern: pattern.regex, options: .caseInsensitive)
-                if regex.firstMatch(in: cleanText, range: NSRange(cleanText.startIndex..., in: cleanText)) != nil {
+        // Pattern matching using cached regexes
+        for pattern in Self.cachedPatterns {
+            if pattern.regex.firstMatch(in: cleanText, range: NSRange(cleanText.startIndex..., in: cleanText)) != nil {
 
-                    // Additional validation for permission requests
-                    if pattern.type == .permissionRequest {
-                        // Ensure this looks like an actual permission request
-                        if !looksLikePermissionRequest(cleanText) {
-                            continue  // Skip this match
-                        }
+                // Additional validation for permission requests
+                if pattern.type == .permissionRequest {
+                    if !looksLikePermissionRequest(cleanText) {
+                        continue
                     }
-
-                    // 중복 알림 방지: 같은 패턴 + 세션 조합이면 스킵
-                    let matchKey = "\(pattern.type.rawValue):\(sessionId)"
-                    if matchKey == lastMatchedKey {
-                        return nil
-                    }
-
-                    lastMatchedKey = matchKey
-                    lastDetectionTime = Date()
-                    let message = extractMessage(from: cleanText)
-                    let context = getRecentContext()
-
-                    return ClaudeNotification(
-                        sessionId: sessionId,
-                        type: pattern.type,
-                        message: message,
-                        context: context
-                    )
                 }
-            } catch {
-                Logger.shared.error("Invalid regex pattern '\(pattern.regex)': \(error)")
+
+                // 중복 알림 방지
+                let matchKey = "\(pattern.type.rawValue):\(sessionId)"
+                if matchKey == lastMatchedKey {
+                    return nil
+                }
+
+                lastMatchedKey = matchKey
+                lastDetectionTime = Date()
+                let message = extractMessage(from: cleanText)
+                let context = getRecentContext()
+
+                return ClaudeNotification(
+                    sessionId: sessionId,
+                    type: pattern.type,
+                    message: message,
+                    context: context
+                )
             }
         }
 
         // Check for Claude prompt waiting
         if isClaudePromptWaiting(cleanText) {
-            // 중복 알림 방지
             let matchKey = "claudePrompt:\(sessionId)"
             if matchKey == lastMatchedKey {
                 return nil
@@ -153,7 +198,6 @@ class ClaudeNotificationDetector {
 
         // Check for custom pattern matches
         if let customMatch = customPatternMatcher.match(in: cleanText) {
-            // 중복 알림 방지: 같은 커스텀 패턴 + 세션 조합이면 스킵
             let matchKey = "custom:\(customMatch.pattern.id):\(sessionId)"
             if matchKey == lastMatchedKey {
                 return nil
@@ -180,80 +224,42 @@ class ClaudeNotificationDetector {
         return nil
     }
 
-    private func stripANSI(_ text: String) -> String {
-        // 포괄적인 ANSI/터미널 제어 시퀀스 패턴
-        let patterns = [
-            "\u{001B}\\[[0-9;]*[A-Za-z]",           // 기본 CSI 시퀀스 (색상, 커서 등)
-            "\u{001B}\\[\\?[0-9;]*[A-Za-z]",        // DEC Private Mode (?포함)
-            "\u{001B}\\[[0-9;]*[>=<]",              // DA 및 기타 제어
-            "\u{001B}\\].*?\u{0007}",               // OSC 시퀀스 (BEL로 종료)
-            "\u{001B}\\].*?\u{001B}\\\\",           // OSC 시퀀스 (ST로 종료)
-            "\u{001B}[()][AB012]",                  // 문자셋 지정
-            "\u{001B}=",                            // Application Keypad Mode
-            "\u{001B}>",                            // Normal Keypad Mode
-        ]
-        let combined = patterns.joined(separator: "|")
-
-        do {
-            let regex = try NSRegularExpression(pattern: combined)
-            let range = NSRange(text.startIndex..., in: text)
-            return regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
-        } catch {
-            Logger.shared.error("Failed to create ANSI strip regex: \(error)")
-            return text
-        }
+    func reset() {
+        outputBuffer = ""
+        lastDetectionTime = nil
+        lastMatchedKey = nil
     }
 
-    /// Detects if the output appears to be from Claude Code's slash command menu
-    /// by looking for characteristic ANSI patterns in the raw (non-stripped) text
+    func resetLastMatch() {
+        lastMatchedKey = nil
+    }
+
+    // MARK: - Private Methods (using cached regexes)
+
+    private func stripANSI(_ text: String) -> String {
+        guard let regex = Self.ansiStripRegex else { return text }
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+    }
+
     private func isSlashCommandMenu(_ rawText: String) -> Bool {
-        // Check if text contains multiple menu-like ANSI patterns
         var patternMatchCount = 0
 
-        for pattern in slashCommandMenuPatterns {
-            do {
-                let regex = try NSRegularExpression(pattern: pattern, options: [])
-                if regex.firstMatch(in: rawText, range: NSRange(rawText.startIndex..., in: rawText)) != nil {
-                    patternMatchCount += 1
-                }
-            } catch {
-                // Invalid pattern, skip
-                continue
+        for regex in Self.slashCommandRegexes {
+            if regex.firstMatch(in: rawText, range: NSRange(rawText.startIndex..., in: rawText)) != nil {
+                patternMatchCount += 1
             }
         }
 
-        // If we find 2 or more menu patterns, it's likely a slash command menu
         return patternMatchCount >= 2
     }
 
-    /// Additional validation to ensure text looks like an actual permission request
     private func looksLikePermissionRequest(_ cleanText: String) -> Bool {
-        let permissionIndicators = [
-            "allow",
-            "permission",
-            "access",
-            "proceed",
-            "continue",
-            "confirm",
-            "\\?",  // Question mark
-            "do you want",
-            "would you like",
-            "may i",
-            "can i",
-        ]
-
-        // Check if text contains permission-related context
-        for indicator in permissionIndicators {
-            do {
-                let regex = try NSRegularExpression(pattern: indicator, options: .caseInsensitive)
-                if regex.firstMatch(in: cleanText, range: NSRange(cleanText.startIndex..., in: cleanText)) != nil {
-                    return true
-                }
-            } catch {
-                continue
+        for regex in Self.permissionRegexes {
+            if regex.firstMatch(in: cleanText, range: NSRange(cleanText.startIndex..., in: cleanText)) != nil {
+                return true
             }
         }
-
         return false
     }
 
@@ -264,14 +270,9 @@ class ClaudeNotificationDetector {
             return false
         }
 
-        for pattern in claudePromptPatterns {
-            do {
-                let regex = try NSRegularExpression(pattern: pattern)
-                if regex.firstMatch(in: lastLine, range: NSRange(lastLine.startIndex..., in: lastLine)) != nil {
-                    return true
-                }
-            } catch {
-                Logger.shared.error("Invalid Claude prompt pattern '\(pattern)': \(error)")
+        for regex in Self.claudePromptRegexes {
+            if regex.firstMatch(in: lastLine, range: NSRange(lastLine.startIndex..., in: lastLine)) != nil {
+                return true
             }
         }
 
@@ -292,19 +293,6 @@ class ClaudeNotificationDetector {
     }
 
     private func getRecentContext() -> String {
-        // 원시 터미널 버퍼는 키 입력 에코, 백스페이스 등 노이즈가 많아 context 비활성화
-        // message 필드가 핵심 정보를 이미 제공함
         return ""
-    }
-
-    func reset() {
-        outputBuffer = ""
-        lastDetectionTime = nil
-        lastMatchedKey = nil
-    }
-
-    /// 마지막 매칭 키만 리셋 (알림 dismiss 시 호출)
-    func resetLastMatch() {
-        lastMatchedKey = nil
     }
 }
