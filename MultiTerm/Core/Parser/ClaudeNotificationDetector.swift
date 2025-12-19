@@ -53,6 +53,7 @@ class ClaudeNotificationDetector {
     private let debounceInterval: TimeInterval = 0.5
     private var outputBuffer: String = ""
     private let bufferMaxSize = 10000
+    private var lastMatchedKey: String?  // 중복 알림 방지용
 
     // ANSI patterns that indicate slash command menu display
     private let slashCommandMenuPatterns: [String] = [
@@ -108,6 +109,13 @@ class ClaudeNotificationDetector {
                         }
                     }
 
+                    // 중복 알림 방지: 같은 패턴 + 세션 조합이면 스킵
+                    let matchKey = "\(pattern.type.rawValue):\(sessionId)"
+                    if matchKey == lastMatchedKey {
+                        return nil
+                    }
+
+                    lastMatchedKey = matchKey
                     lastDetectionTime = Date()
                     let message = extractMessage(from: cleanText)
                     let context = getRecentContext()
@@ -126,6 +134,13 @@ class ClaudeNotificationDetector {
 
         // Check for Claude prompt waiting
         if isClaudePromptWaiting(cleanText) {
+            // 중복 알림 방지
+            let matchKey = "claudePrompt:\(sessionId)"
+            if matchKey == lastMatchedKey {
+                return nil
+            }
+
+            lastMatchedKey = matchKey
             lastDetectionTime = Date()
 
             return ClaudeNotification(
@@ -138,6 +153,13 @@ class ClaudeNotificationDetector {
 
         // Check for custom pattern matches
         if let customMatch = customPatternMatcher.match(in: cleanText) {
+            // 중복 알림 방지: 같은 커스텀 패턴 + 세션 조합이면 스킵
+            let matchKey = "custom:\(customMatch.pattern.id):\(sessionId)"
+            if matchKey == lastMatchedKey {
+                return nil
+            }
+
+            lastMatchedKey = matchKey
             lastDetectionTime = Date()
             let message = extractMessage(from: cleanText)
             let context = getRecentContext()
@@ -278,5 +300,11 @@ class ClaudeNotificationDetector {
     func reset() {
         outputBuffer = ""
         lastDetectionTime = nil
+        lastMatchedKey = nil
+    }
+
+    /// 마지막 매칭 키만 리셋 (알림 dismiss 시 호출)
+    func resetLastMatch() {
+        lastMatchedKey = nil
     }
 }
