@@ -797,6 +797,115 @@ echo "✅ $APP_NAME.app installed to /Applications"
 
 **해결**: `needsDisplay = true`만 사용, `display()` 제거
 
+### 10. HSplitView/VSplitView 비율 무시
+
+**증상**: Split 버튼 클릭 시 50/50이 아닌 불균형한 비율로 분할됨
+
+**원인**: `HSplitView`/`VSplitView`는 `ratio` 값을 무시하고 자체적으로 divider 위치 관리
+```swift
+// SplitNode에 ratio: 0.5가 저장되지만...
+case .split(_, let direction, let first, let second, _):
+//                                                    ↑ ratio 무시!
+    HSplitView {
+        firstView.frame(minWidth: 150)  // 최소값만 설정, 비율 미적용
+        secondView.frame(minWidth: 150)
+    }
+```
+
+**해결**: `GeometryReader` + `HStack`/`VStack` + 커스텀 draggable divider 사용
+```swift
+case .split(_, let direction, let first, let second, let ratio):
+    SplitContainerView(
+        direction: direction,
+        first: first,
+        second: second,
+        initialRatio: ratio,  // ratio 실제 적용
+        ...
+    )
+```
+
+---
+
+## 13단계: Split View 비율 제어
+
+```
+HSplitView/VSplitView 대신 커스텀 SplitContainerView 사용:
+
+SplitContainerView:
+- GeometryReader로 전체 크기 파악
+- HStack/VStack으로 비율에 따라 크기 할당
+- @State ratio로 드래그 조절 가능
+- 드래그 가능한 Divider (4pt 너비)
+```
+
+### 핵심 코드 패턴
+
+```swift
+struct SplitContainerView: View {
+    let direction: SplitDirection
+    let first: SplitNode
+    let second: SplitNode
+    let initialRatio: CGFloat
+
+    @State private var ratio: CGFloat
+    @State private var isDragging = false
+
+    private let dividerWidth: CGFloat = 4
+    private let minRatio: CGFloat = 0.15
+    private let maxRatio: CGFloat = 0.85
+
+    init(...) {
+        self._ratio = State(initialValue: initialRatio)
+        // ...
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            if direction == .horizontal {
+                let availableWidth = geometry.size.width - dividerWidth
+                let firstWidth = availableWidth * ratio
+                let secondWidth = availableWidth * (1 - ratio)
+
+                HStack(spacing: 0) {
+                    SplitTerminalView(node: first, ...)
+                        .frame(width: firstWidth)
+
+                    // Draggable divider
+                    Rectangle()
+                        .fill(isDragging ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.3))
+                        .frame(width: dividerWidth)
+                        .onHover { hovering in
+                            if hovering { NSCursor.resizeLeftRight.push() }
+                            else { NSCursor.pop() }
+                        }
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    isDragging = true
+                                    let newRatio = (firstWidth + value.translation.width) / availableWidth
+                                    ratio = min(max(newRatio, minRatio), maxRatio)
+                                }
+                                .onEnded { _ in isDragging = false }
+                        )
+
+                    SplitTerminalView(node: second, ...)
+                        .frame(width: secondWidth)
+                }
+            } else {
+                // VStack for vertical split (동일한 패턴)
+            }
+        }
+    }
+}
+```
+
+### 비율 제약
+- **초기 비율**: 0.5 (정확히 50/50)
+- **최소 비율**: 0.15 (각 pane 최소 15%)
+- **최대 비율**: 0.85 (각 pane 최대 85%)
+
+> ⚠️ **주의**: `HSplitView`/`VSplitView`는 초기 비율 설정 API가 없으므로 커스텀 구현 필수.
+
 ---
 
 ## 요약: 개발 순서 (업데이트)
@@ -814,3 +923,4 @@ echo "✅ $APP_NAME.app installed to /Applications"
 11. **알림 시스템** - Claude Code 연동, CustomPattern
 12. **Notes 사이드바** - Markdown 편집/미리보기
 13. **CPU 최적화** - 정규식 캐싱, 쓰로틀링, 버퍼링
+14. **Split View 비율 제어** - GeometryReader + 커스텀 divider
