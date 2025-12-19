@@ -35,7 +35,7 @@ class SessionManager: ObservableObject {
         let session = TerminalSession(
             name: name,
             workingDirectory: workingDirectory,
-            status: .idle
+            status: .running
         )
 
         let controller = TerminalController(sessionId: session.id)
