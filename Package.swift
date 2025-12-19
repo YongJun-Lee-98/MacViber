@@ -10,12 +10,16 @@ let package = Package(
         .executable(name: "MultiTerm", targets: ["MultiTerm"])
     ],
     dependencies: [
-        .package(path: "LocalPackages/SwiftTerm")
+        .package(path: "LocalPackages/SwiftTerm"),
+        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.0")
     ],
     targets: [
         .executableTarget(
             name: "MultiTerm",
-            dependencies: ["SwiftTerm"],
+            dependencies: [
+                "SwiftTerm",
+                .product(name: "MarkdownUI", package: "swift-markdown-ui")
+            ],
             path: "MultiTerm"
         )
     ]

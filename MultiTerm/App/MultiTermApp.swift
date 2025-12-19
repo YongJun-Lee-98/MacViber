@@ -123,6 +123,14 @@ struct MultiTermApp: App {
                 .keyboardShortcut("k", modifiers: [.command, .shift])
             }
 
+            // View menu
+            CommandMenu("View") {
+                Button("Toggle Notes Sidebar") {
+                    NotificationCenter.default.post(name: .toggleRightSidebar, object: nil)
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+            }
+
             // Settings menu
             CommandMenu("Settings") {
                 Button("Notification Settings...") {
@@ -168,6 +176,7 @@ extension Notification.Name {
     static let showColorSettings = Notification.Name("showColorSettings")
     static let showNotificationSettings = Notification.Name("showNotificationSettings")
     static let hideNotificationGrid = Notification.Name("hideNotificationGrid")
+    static let toggleRightSidebar = Notification.Name("toggleRightSidebar")
 }
 
 // MARK: - Keyboard Shortcuts View
@@ -213,6 +222,11 @@ struct KeyboardShortcutsView: View {
                     ShortcutSection(title: "Navigation", shortcuts: [
                         ShortcutItem(keys: "⌥⌘ ]", description: "Focus Next Pane"),
                         ShortcutItem(keys: "⌥⌘ [", description: "Focus Previous Pane"),
+                    ])
+
+                    // View
+                    ShortcutSection(title: "View", shortcuts: [
+                        ShortcutItem(keys: "⇧⌘ M", description: "Toggle Notes Sidebar"),
                     ])
 
                     // Help

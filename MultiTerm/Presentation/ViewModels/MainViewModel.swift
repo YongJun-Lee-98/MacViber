@@ -6,6 +6,7 @@ import AppKit
 class MainViewModel: ObservableObject {
     @Published var columnVisibility: NavigationSplitViewVisibility = .all
     @Published var showNotificationGrid: Bool = false
+    @Published var showRightSidebar: Bool = false
     @Published var focusedPaneId: UUID?
     @Published var showKeyboardShortcuts: Bool = false
     @Published private(set) var selectedSessionId: UUID?
@@ -173,6 +174,12 @@ class MainViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .toggleRightSidebar)
+            .sink { [weak self] _ in
+                self?.toggleRightSidebar()
+            }
+            .store(in: &cancellables)
     }
 
     func addNewTerminal() {
@@ -281,6 +288,12 @@ class MainViewModel: ObservableObject {
     func toggleNotificationGrid() {
         withAnimation {
             showNotificationGrid.toggle()
+        }
+    }
+
+    func toggleRightSidebar() {
+        withAnimation {
+            showRightSidebar.toggle()
         }
     }
 

@@ -22,8 +22,14 @@ struct MainView: View {
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 300)
         } detail: {
-            // Main Area: Notification Grid or Terminal View
-            detailContent
+            // Main Area: Notification Grid or Terminal View + Right Sidebar
+            HSplitView {
+                detailContent
+
+                if viewModel.showRightSidebar {
+                    RightSidebarView()
+                }
+            }
         }
         .toolbar {
             toolbarContent
@@ -123,6 +129,12 @@ struct MainView: View {
                 }
                 .help("Toggle Notifications")
             }
+
+            // Notes sidebar button
+            Button(action: viewModel.toggleRightSidebar) {
+                Image(systemName: viewModel.showRightSidebar ? "note.text" : "note.text.badge.plus")
+            }
+            .help("Toggle Notes (Shift+Cmd+M)")
 
             // Help button
             Button(action: { viewModel.showKeyboardShortcuts = true }) {
