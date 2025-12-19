@@ -149,7 +149,10 @@ class TerminalController: ObservableObject {
     }
 
     func terminate() {
+        // Send exit command to gracefully terminate the shell
+        terminalView?.send(txt: "exit\n")
         isRunning = false
+        terminalView = nil
     }
 
     // MARK: - Copy/Paste Support

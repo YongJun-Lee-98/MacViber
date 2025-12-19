@@ -3,6 +3,7 @@ import AppKit
 
 @main
 struct MultiTermApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var themeManager = ThemeManager.shared
     @State private var showingShortcuts = false
@@ -285,4 +286,18 @@ struct ShortcutItem: Identifiable {
     let id = UUID()
     let keys: String
     let description: String
+}
+
+// MARK: - App Delegate
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillTerminate(_ notification: Notification) {
+        // 모든 터미널 세션 종료
+        Logger.shared.info("Application terminating - closing all terminal sessions")
+        SessionManager.shared.terminateAllSessions()
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true
+    }
 }

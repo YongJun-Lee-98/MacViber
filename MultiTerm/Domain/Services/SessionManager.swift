@@ -538,4 +538,23 @@ class SessionManager: ObservableObject {
 
         controller.selectAllText()
     }
+
+    // MARK: - App Lifecycle
+
+    /// 앱 종료 시 모든 터미널 세션 종료
+    func terminateAllSessions() {
+        Logger.shared.info("Terminating all \(controllers.count) terminal sessions")
+
+        for (sessionId, controller) in controllers {
+            Logger.shared.debug("Terminating session: \(sessionId)")
+            controller.terminate()
+        }
+
+        controllers.removeAll()
+        sessions.removeAll()
+        activeNotifications.removeAll()
+
+        // Clear dock badge
+        NSApp.dockTile.badgeLabel = nil
+    }
 }
