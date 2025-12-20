@@ -1,6 +1,7 @@
 # MacViber
 
-macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표시 기능 포함
+macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표시 기능 포함  
+<img width="1536" height="1024" alt="githubimg" src="https://github.com/user-attachments/assets/8d373ff8-3e72-4273-991d-a03692e093a3" />  
 
 ## Download
 
