@@ -523,16 +523,20 @@ extension TerminalView {
         }
         
         if selectionRange != .empty {
-            assert (selectionRange.location >= 0)
-            // Looks like we can start the selection range beyond the boundary and it wont be a problem
-            //assert (selectionRange.location < cols)
-            assert (selectionRange.length >= 0)
-            if (selectionRange.location + selectionRange.length >= cols) {
+            assert(selectionRange.location >= 0)
+            assert(selectionRange.length >= 0)
+
+            // Clamp range to actual attributed string length
+            // Wide characters (Korean, CJK) take 2 columns but are 1 character in the string
+            let stringLength = attributedString.length
+            let clampedLocation = min(selectionRange.location, stringLength)
+            let maxLength = max(0, stringLength - clampedLocation)
+            let clampedLength = min(selectionRange.length, maxLength)
+
+            if clampedLength > 0 {
+                let safeRange = NSRange(location: clampedLocation, length: clampedLength)
+                attributedString.addAttribute(.selectionBackgroundColor, value: selectedTextBackgroundColor, range: safeRange)
             }
-            if row == 1 {
-                print(selectionRange)
-            }
-            attributedString.addAttribute(.selectionBackgroundColor, value: selectedTextBackgroundColor, range: selectionRange)
         }
     }
 

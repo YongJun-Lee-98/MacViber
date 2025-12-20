@@ -1819,15 +1819,22 @@ open class Terminal {
         let param = max (pars.count > 0 ? pars [0] : 1, 1)
         let buffer = self.buffer
         var top = buffer.scrollTop
-        
+
         if buffer.y < top {
             top = 0
         }
+
+        let oldY = buffer.y
+
         if (buffer.y - param < top) {
             buffer.y = top
         } else {
             buffer.y -= param
         }
+
+        // Trigger screen refresh for cursor movement
+        updateRange(oldY)
+        updateRange(buffer.y)
     }
     
     //
@@ -1838,24 +1845,30 @@ open class Terminal {
     {
         let buffer = self.buffer
         let param = max (pars.count > 0 ? pars [0] : 1, 1)
-        
+
         var bottom = buffer.scrollBottom
         // When the cursor starts below the scroll region, CUD moves it down to the
         // bottom of the screen.
         if buffer.y > bottom {
             bottom = buffer.rows-1
         }
+
+        let oldY = buffer.y
         let newY = buffer.y + param
 
         if newY >= bottom {
-                buffer.y = bottom
+            buffer.y = bottom
         } else {
-                buffer.y = newY
+            buffer.y = newY
         }
         // If the end of the line is hit, prevent this action from wrapping around to the next line.
         if buffer.x >= cols {
-                buffer.x -= 1
+            buffer.x -= 1
         }
+
+        // Trigger screen refresh for cursor movement
+        updateRange(oldY)
+        updateRange(buffer.y)
     }
     
     //
@@ -1870,7 +1883,7 @@ open class Terminal {
     func cursorForward (count: Int)
     {
         var right = marginMode ? buffer.marginRight : cols-1
-        
+
         // When the cursor starts after the right margin, CUF moves to the full width
         if buffer.x > right {
             right = buffer.cols - 1
@@ -1879,6 +1892,9 @@ open class Terminal {
         if buffer.x > right {
             buffer.x = right
         }
+
+        // Trigger screen refresh for cursor movement
+        updateRange(buffer.y)
     }
 
     //
@@ -1893,10 +1909,10 @@ open class Terminal {
     func cursorBackward (count: Int)
     {
         let buffer = self.buffer
-        
+
         // What is our left margin - depending on the settings.
         var left = marginMode ? buffer.marginLeft : 0
-        
+
         // If the cursor is positioned before the margin, we can go backwards to the first column
         if buffer.x < left {
             left = 0
@@ -1907,6 +1923,9 @@ open class Terminal {
         } else {
             buffer.x = newX
         }
+
+        // Trigger screen refresh for cursor movement
+        updateRange(buffer.y)
     }
 
     //
