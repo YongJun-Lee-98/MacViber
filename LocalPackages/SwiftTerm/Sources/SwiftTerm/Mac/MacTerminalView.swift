@@ -90,6 +90,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     var search: SearchService!
     var debug: TerminalDebugView?
     var pendingDisplay: Bool = false
+    var pendingResize: DispatchWorkItem?
     
     var cellDimension: CellDimension!
     var caretView: CaretView!

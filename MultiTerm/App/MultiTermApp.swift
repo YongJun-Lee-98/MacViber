@@ -87,10 +87,21 @@ struct MultiTermApp: App {
                 .keyboardShortcut("[", modifiers: [.command, .option])
             }
 
-            // Let default Copy/Paste work through responder chain
-            // Only add Select All after pasteboard commands
-            CommandGroup(after: .pasteboard) {
+            // Explicitly route Copy/Paste through SessionManager
+            // (responder chain doesn't reach CustomTerminalView)
+            CommandGroup(replacing: .pasteboard) {
+                Button("Copy") {
+                    SessionManager.shared.copyFromActiveTerminal()
+                }
+                .keyboardShortcut("c", modifiers: .command)
+
+                Button("Paste") {
+                    SessionManager.shared.pasteToActiveTerminal()
+                }
+                .keyboardShortcut("v", modifiers: .command)
+
                 Divider()
+
                 Button("Select All") {
                     SessionManager.shared.selectAllInActiveTerminal()
                 }

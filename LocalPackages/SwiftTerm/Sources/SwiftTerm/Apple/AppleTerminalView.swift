@@ -123,18 +123,24 @@ extension TerminalView {
     func processSizeChange (newSize: CGSize) -> Bool {
         let newRows = Int (newSize.height / cellDimension.height)
         let newCols = Int (getEffectiveWidth (size: newSize) / cellDimension.width)
-        
+
         if newCols != terminal.cols || newRows != terminal.rows {
-            selection.active = false
-            terminal.resize (cols: newCols, rows: newRows)
-            
-            // These used to be outside
-            accessibility.invalidate ()
-            search.invalidate ()
-            
-            terminalDelegate?.sizeChanged (source: self, newCols: newCols, newRows: newRows)
-           
-            updateScroller()
+            // Cancel any pending resize to debounce rapid resize events
+            pendingResize?.cancel()
+
+            // Debounce resize with ~60fps delay (16ms)
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                self.selection.active = false
+                self.terminal.resize(cols: newCols, rows: newRows)
+                self.accessibility.invalidate()
+                self.search.invalidate()
+                self.terminalDelegate?.sizeChanged(source: self, newCols: newCols, newRows: newRows)
+                self.updateScroller()
+            }
+            pendingResize = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.016, execute: workItem)
+
             return true
         }
         return false
