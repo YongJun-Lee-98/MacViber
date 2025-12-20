@@ -2045,6 +2045,9 @@ open class Terminal {
         let param = max (pars.count > 0 ? pars [0] : 1, 1)
 
         buffer.x = (usingMargins() ? buffer.marginLeft : 0) + min (param - 1, cols - 1)
+
+        // Trigger screen refresh for cursor movement
+        updateRange(buffer.y)
     }
 
     //
@@ -4016,6 +4019,7 @@ open class Terminal {
     func cmdVPositionRelative (_ pars: [Int], _ collect: cstring)
     {
         let p = max (pars.count == 0 ? 1 : pars [0], 1)
+        let oldY = buffer.y
         let newY = buffer.y + p
 
         if newY >= rows {
@@ -4028,6 +4032,10 @@ open class Terminal {
         if buffer.x >= cols {
             buffer.x -= 1
         }
+
+        // Trigger screen refresh for cursor movement
+        updateRange(oldY)
+        updateRange(buffer.y)
     }
 
 
@@ -4038,12 +4046,17 @@ open class Terminal {
     func cmdLinePosAbsolute (_ pars: [Int], _ collect: cstring)
     {
         let p = max (pars.count == 0 ? 1 : pars [0], 1)
+        let oldY = buffer.y
 
         if (p - 1 >= rows) {
             buffer.y = rows - 1
         } else {
             buffer.y = p - 1
         }
+
+        // Trigger screen refresh for cursor movement
+        updateRange(oldY)
+        updateRange(buffer.y)
     }
 
     //
@@ -4170,11 +4183,14 @@ open class Terminal {
     func cmdHPositionRelative (_ pars: [Int], _ collect: cstring)
     {
         let p = max (pars.count == 0 ? 1 : pars [0], 1)
-        
+
         buffer.x += p
         if buffer.x >= cols {
             buffer.x = cols - 1
         }
+
+        // Trigger screen refresh for cursor movement
+        updateRange(buffer.y)
     }
 
     //
@@ -4189,6 +4205,9 @@ open class Terminal {
         if buffer.x >= cols {
             buffer.x = cols - 1
         }
+
+        // Trigger screen refresh for cursor movement
+        updateRange(buffer.y)
     }
 
     //
