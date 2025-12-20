@@ -202,7 +202,14 @@ class MainViewModel: ObservableObject {
 
             // Use captured state (not current state which may have changed during modal)
             if wasInSplitView, let paneId = capturedPaneId {
-                sessionManager.updatePaneSession(paneId, newSessionId: session.id)
+                // Split horizontally to add new terminal alongside existing one
+                let fallbackSize = CGSize(width: 800, height: 600)
+                sessionManager.splitPane(
+                    paneId,
+                    direction: .horizontal,
+                    newSessionId: session.id,
+                    currentSize: fallbackSize
+                )
             } else {
                 sessionManager.selectedSessionId = session.id
                 selectedSessionId = session.id
