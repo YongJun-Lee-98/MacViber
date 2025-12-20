@@ -63,16 +63,10 @@ final class ThemeManager: ObservableObject {
     }
 
     func selectTheme(_ theme: TerminalTheme) {
-        Logger.shared.debug("[THEME] selectTheme called: \(theme.name)")
-        guard theme.id != currentTheme.id else {
-            Logger.shared.debug("[THEME] Same theme selected, skipping")
-            return
-        }
+        guard theme.id != currentTheme.id else { return }
 
-        Logger.shared.debug("[THEME] Setting currentTheme to \(theme.name)")
         currentTheme = theme
         save()
-        Logger.shared.debug("[THEME] Sending theme to themeChangedSubject")
         themeChangedSubject.send(theme)
 
         // Apply syntax highlighting colors to .zshrc
@@ -84,7 +78,6 @@ final class ThemeManager: ObservableObject {
         Task {
             do {
                 try await SyntaxHighlightingInstaller.shared.updateSyntaxColors(colors)
-                Logger.shared.debug("[THEME] Syntax colors applied to .zshrc")
             } catch {
                 Logger.shared.error("[THEME] Failed to apply syntax colors: \(error)")
             }

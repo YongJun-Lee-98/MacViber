@@ -132,10 +132,7 @@ class SessionManager: ObservableObject {
         let prefs = preferencesManager.preferences
 
         // Type filter check
-        guard prefs.isTypeEnabled(notification.type) else {
-            Logger.shared.debug("Notification filtered out by type: \(notification.type.rawValue)")
-            return
-        }
+        guard prefs.isTypeEnabled(notification.type) else { return }
 
         // Apply auto-pin settings
         var modifiedNotification = notification
@@ -545,8 +542,7 @@ class SessionManager: ObservableObject {
     func terminateAllSessions() {
         Logger.shared.info("Terminating all \(controllers.count) terminal sessions")
 
-        for (sessionId, controller) in controllers {
-            Logger.shared.debug("Terminating session: \(sessionId)")
+        for (_, controller) in controllers {
             controller.terminate()
         }
 

@@ -29,7 +29,6 @@ macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표�
 Run the automated setup script:
 
 ```bash
-cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MacViber
 ./Scripts/setup.sh
 ```
 
@@ -63,7 +62,6 @@ swift build -c release
 ### 앱 번들 빌드 (권장)
 
 ```bash
-cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MacViber
 ./Scripts/build-app.sh
 ```
 
@@ -79,7 +77,6 @@ cp -R build/MacViber.app /Applications/
 ### 개발 모드 실행
 
 ```bash
-cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MacViber
 swift run
 ```
 
