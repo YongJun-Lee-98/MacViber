@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "MultiTerm",
+    name: "MacViber",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "MultiTerm", targets: ["MultiTerm"])
+        .executable(name: "MacViber", targets: ["MacViber"])
     ],
     dependencies: [
         .package(path: "LocalPackages/SwiftTerm"),
@@ -15,12 +15,12 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "MultiTerm",
+            name: "MacViber",
             dependencies: [
                 "SwiftTerm",
                 .product(name: "MarkdownUI", package: "swift-markdown-ui")
             ],
-            path: "MultiTerm"
+            path: "MacViber"
         )
     ]
 )

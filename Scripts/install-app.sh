@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MultiTerm App Installer
+# MacViber App Installer
 # Installs the built app to /Applications
 # Supports production and test builds
 
@@ -11,12 +11,12 @@ usage() {
     echo "Usage: $0 [--test|-t]"
     echo ""
     echo "Options:"
-    echo "  --test, -t    Install as test app ({test} MultiTerm.app)"
+    echo "  --test, -t    Install as test app ({test} MacViber.app)"
     echo "  -h, --help    Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0            Install as MultiTerm.app (production)"
-    echo "  $0 --test     Install as {test} MultiTerm.app"
+    echo "  $0            Install as MacViber.app (production)"
+    echo "  $0 --test     Install as {test} MacViber.app"
     exit 0
 }
 
@@ -41,15 +41,15 @@ done
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-APP_BUNDLE="$PROJECT_DIR/build/MultiTerm.app"
+APP_BUNDLE="$PROJECT_DIR/build/MacViber.app"
 INSTALL_DIR="/Applications"
 
 # Set app name based on mode
 if [ "$IS_TEST" = true ]; then
-    INSTALL_NAME="{test} MultiTerm.app"
+    INSTALL_NAME="{test} MacViber.app"
     MODE_LABEL="TEST"
 else
-    INSTALL_NAME="MultiTerm.app"
+    INSTALL_NAME="MacViber.app"
     MODE_LABEL="PRODUCTION"
 fi
 
@@ -60,16 +60,16 @@ echo ""
 
 # Check if app bundle exists
 if [ ! -d "$APP_BUNDLE" ]; then
-    echo "❌ Error: MultiTerm.app not found at $APP_BUNDLE"
+    echo "❌ Error: MacViber.app not found at $APP_BUNDLE"
     echo "   Run ./Scripts/build-app.sh first"
     exit 1
 fi
 
 # Kill running app if exists
-echo "🛑 Checking for running MultiTerm..."
-if pgrep -x "MultiTerm" > /dev/null 2>&1; then
-    echo "   Terminating running MultiTerm..."
-    pkill -x "MultiTerm" || true
+echo "🛑 Checking for running MacViber..."
+if pgrep -x "MacViber" > /dev/null 2>&1; then
+    echo "   Terminating running MacViber..."
+    pkill -x "MacViber" || true
     sleep 1
 fi
 

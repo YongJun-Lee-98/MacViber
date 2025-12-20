@@ -8,8 +8,8 @@ final class ThemeManager: ObservableObject {
     @Published private(set) var currentTheme: TerminalTheme
     @Published var customColors: CustomColorSettings
 
-    private let userDefaultsKey = "MultiTerm.SelectedThemeId"
-    private let customColorsKey = "MultiTerm.CustomColorSettings"
+    private let userDefaultsKey = "MacViber.SelectedThemeId"
+    private let customColorsKey = "MacViber.CustomColorSettings"
     private let themeChangedSubject = PassthroughSubject<TerminalTheme, Never>()
     private let colorsChangedSubject = PassthroughSubject<Void, Never>()
 

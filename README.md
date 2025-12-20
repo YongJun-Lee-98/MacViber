@@ -1,4 +1,4 @@
-# MultiTerm
+# MacViber
 
 macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표시 기능 포함
 
@@ -29,7 +29,7 @@ macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표�
 Run the automated setup script:
 
 ```bash
-cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MultiTerm
+cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MacViber
 ./Scripts/setup.sh
 ```
 
@@ -43,8 +43,8 @@ The script will:
 
 ```bash
 # 1. Clone the repository (if from GitHub)
-git clone https://github.com/your-username/MultiTerm.git
-cd MultiTerm
+git clone https://github.com/your-username/MacViber.git
+cd MacViber
 
 # 2. Resolve dependencies
 swift package resolve
@@ -63,23 +63,23 @@ swift build -c release
 ### 앱 번들 빌드 (권장)
 
 ```bash
-cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MultiTerm
+cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MacViber
 ./Scripts/build-app.sh
 ```
 
 빌드 완료 후:
 ```bash
 # 앱 실행
-open build/MultiTerm.app
+open build/MacViber.app
 
 # Applications 폴더에 설치
-cp -R build/MultiTerm.app /Applications/
+cp -R build/MacViber.app /Applications/
 ```
 
 ### 개발 모드 실행
 
 ```bash
-cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MultiTerm
+cd /Users/dev/Documents/Github_repo/05_Utilities_Tools/MacViber
 swift run
 ```
 
@@ -160,7 +160,7 @@ Claude Code 실행 중 질문이나 권한 요청이 발생하면:
 
 ### Claude Code CLI 통합
 
-MultiTerm은 [Claude Code CLI](https://claude.ai/code)와 완벽하게 호환됩니다. Claude Code의 **슬래시 명령어** (`/help`, `/review` 등)와 **파일 자동완성** (`@` 트리거)을 사용하려면 shell 설정이 필요합니다.
+MacViber은 [Claude Code CLI](https://claude.ai/code)와 완벽하게 호환됩니다. Claude Code의 **슬래시 명령어** (`/help`, `/review` 등)와 **파일 자동완성** (`@` 트리거)을 사용하려면 shell 설정이 필요합니다.
 
 #### 문제 증상
 
@@ -208,16 +208,16 @@ code ~/.zshrc
 # 3. 변경사항 적용
 source ~/.zshrc
 
-# 4. MultiTerm 재시작 (터미널 세션 새로 시작)
+# 4. MacViber 재시작 (터미널 세션 새로 시작)
 ```
 
 #### 확인 방법
 
-1. MultiTerm에서 `claude` 실행
+1. MacViber에서 `claude` 실행
 2. `/` 입력하여 슬래시 명령어 목록 표시
 3. **방향키 ↑↓로 명령어 선택 가능** ✅
 
-문제가 지속되면 MultiTerm을 완전히 재시작하세요.
+문제가 지속되면 MacViber을 완전히 재시작하세요.
 
 #### 기술적 배경
 
@@ -231,15 +231,15 @@ source ~/.zshrc
 ## 프로젝트 구조
 
 ```
-MultiTerm/
+MacViber/
 ├── Package.swift                     # SPM 설정
 ├── Scripts/
 │   └── build-app.sh                  # 앱 번들 빌드 스크립트
 ├── build/
-│   └── MultiTerm.app                 # 빌드된 앱 번들
-└── MultiTerm/
+│   └── MacViber.app                 # 빌드된 앱 번들
+└── MacViber/
     ├── App/
-    │   └── MultiTermApp.swift        # 앱 진입점, 키보드 단축키, 도움말 뷰
+    │   └── MacViberApp.swift        # 앱 진입점, 키보드 단축키, 도움말 뷰
     ├── Core/
     │   ├── Terminal/                 # SwiftTerm 래퍼
     │   └── Parser/                   # Claude 알림 감지
@@ -271,7 +271,7 @@ MultiTerm/
 
 ## Dependencies
 
-MultiTerm uses the following open-source libraries:
+MacViber uses the following open-source libraries:
 
 ### SwiftTerm
 - **Repository**: https://github.com/migueldeicaza/SwiftTerm
@@ -289,7 +289,7 @@ For complete license information, see [docs/LICENSES.md](docs/LICENSES.md).
 
 ## License
 
-MultiTerm is licensed under the [MIT License](LICENSE).
+MacViber is licensed under the [MIT License](LICENSE).
 
 ### Third-Party Licenses
 

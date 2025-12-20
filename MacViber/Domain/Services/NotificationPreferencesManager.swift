@@ -6,7 +6,7 @@ final class NotificationPreferencesManager: ObservableObject {
 
     @Published private(set) var preferences: NotificationPreferences
 
-    private let userDefaultsKey = "MultiTerm.NotificationPreferences"
+    private let userDefaultsKey = "MacViber.NotificationPreferences"
     private let preferencesChangedSubject = PassthroughSubject<NotificationPreferences, Never>()
 
     var preferencesChanged: AnyPublisher<NotificationPreferences, Never> {

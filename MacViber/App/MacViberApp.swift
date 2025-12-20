@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 @main
-struct MultiTermApp: App {
+struct MacViberApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var themeManager = ThemeManager.shared
@@ -12,7 +12,7 @@ struct MultiTermApp: App {
     @State private var showingNotificationSettings = false
 
     init() {
-        Logger.shared.info("MultiTerm app started")
+        Logger.shared.info("MacViber app started")
     }
 
     var body: some Scene {

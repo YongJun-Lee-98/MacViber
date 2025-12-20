@@ -11,9 +11,9 @@ DerivedData/
 *.dSYM.zip
 *.dSYM
 
-# MultiTerm Build Output
+# MacViber Build Output
 build/
-MultiTerm.app
+MacViber.app
 *.iconset/
 
 # macOS System Files

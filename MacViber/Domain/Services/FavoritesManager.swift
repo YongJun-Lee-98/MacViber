@@ -28,7 +28,7 @@ final class FavoritesManager: ObservableObject {
 
     @Published private(set) var favorites: [FavoriteFolder] = []
 
-    private let userDefaultsKey = "MultiTerm.FavoriteFolders"
+    private let userDefaultsKey = "MacViber.FavoriteFolders"
 
     private init() {
         load()

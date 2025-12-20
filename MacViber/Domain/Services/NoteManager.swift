@@ -9,9 +9,9 @@ class NoteManager: ObservableObject {
     private let fileURL: URL
 
     private init() {
-        // ~/Library/Application Support/MultiTerm/note.md
+        // ~/Library/Application Support/MacViber/note.md
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let multiTermDir = appSupport.appendingPathComponent("MultiTerm")
+        let multiTermDir = appSupport.appendingPathComponent("MacViber")
 
         // Create directory if needed
         try? FileManager.default.createDirectory(at: multiTermDir, withIntermediateDirectories: true)

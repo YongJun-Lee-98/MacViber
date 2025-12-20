@@ -1,13 +1,13 @@
-# MultiTerm 개발 가이드
+# MacViber 개발 가이드
 
-Claude Code를 사용하여 MultiTerm을 처음부터 다시 만들 때 참고할 가이드입니다.
+Claude Code를 사용하여 MacViber을 처음부터 다시 만들 때 참고할 가이드입니다.
 
 ---
 
 ## 1단계: 프로젝트 초기 설정
 
 ```
-macOS SwiftUI 앱 "MultiTerm"을 만들어줘.
+macOS SwiftUI 앱 "MacViber"을 만들어줘.
 - Swift Package Manager 사용
 - SwiftTerm 라이브러리 의존성 추가 (https://github.com/migueldeicaza/SwiftTerm)
 - 최소 macOS 13.0 타겟
@@ -17,12 +17,12 @@ macOS SwiftUI 앱 "MultiTerm"을 만들어줘.
 ### 예상 디렉토리 구조
 
 ```
-MultiTerm/
+MacViber/
 ├── Package.swift
 ├── Scripts/
 │   └── build-app.sh
-└── MultiTerm/
-    ├── MultiTermApp.swift
+└── MacViber/
+    ├── MacViberApp.swift
     ├── Core/
     │   ├── Terminal/
     │   └── Utilities/
@@ -528,7 +528,7 @@ let bufferRow = screenRow + terminal.buffer.yDisp
 ```bash
 #!/bin/bash
 
-APP_NAME="MultiTerm"
+APP_NAME="MacViber"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # 실행 중인 앱 종료
@@ -582,7 +582,7 @@ open "$PROJECT_DIR/build/$APP_NAME.app"
 
 NoteManager (싱글톤):
 - @Published note: Note
-- 파일 저장 위치: ~/Library/Application Support/MultiTerm/note.md
+- 파일 저장 위치: ~/Library/Application Support/MacViber/note.md
 - load(), save() 메서드
 
 NoteViewModel:
@@ -728,7 +728,7 @@ termView.needsDisplay = true
 
 ```bash
 #!/bin/bash
-APP_NAME="MultiTerm"
+APP_NAME="MacViber"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # 기존 앱 종료
@@ -750,7 +750,7 @@ open "$PROJECT_DIR/build/$APP_NAME.app"
 
 ```bash
 #!/bin/bash
-APP_NAME="MultiTerm"
+APP_NAME="MacViber"
 
 # Production/Test 모드 선택
 if [[ "$1" == "--test" ]]; then

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MultiTerm App Bundle Builder
+# MacViber App Bundle Builder
 # Creates a proper macOS .app bundle
 
 set -e
 
 # Configuration
-APP_NAME="MultiTerm"
-BUNDLE_ID="com.multiterm.app"
+APP_NAME="MacViber"
+BUNDLE_ID="com.macviber.app"
 VERSION="1.1.0"
 BUILD_NUMBER="2"
 
@@ -32,7 +32,7 @@ fi
 echo "🧹 Clearing caches..."
 rm -rf "$PROJECT_DIR/.build"
 rm -rf "$PROJECT_DIR/build"
-rm -rf ~/Library/Caches/com.multiterm.app 2>/dev/null || true
+rm -rf ~/Library/Caches/com.macviber.app 2>/dev/null || true
 
 echo "🔨 Building $APP_NAME..."
 

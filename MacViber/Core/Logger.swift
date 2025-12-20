@@ -15,12 +15,12 @@ final class Logger {
     private let maxLogSize: Int = 5 * 1024 * 1024 // 5MB
     private let dateFormatter: DateFormatter
     private let fileManager = FileManager.default
-    private let queue = DispatchQueue(label: "com.multiterm.logger", qos: .utility)
+    private let queue = DispatchQueue(label: "com.macviber.logger", qos: .utility)
 
     private init() {
         let homeDirectory = fileManager.homeDirectoryForCurrentUser
-        logDirectory = homeDirectory.appendingPathComponent("Library/Logs/MultiTerm")
-        logFileURL = logDirectory.appendingPathComponent("multiterm.log")
+        logDirectory = homeDirectory.appendingPathComponent("Library/Logs/MacViber")
+        logFileURL = logDirectory.appendingPathComponent("macviber.log")
 
         dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
@@ -41,7 +41,7 @@ final class Logger {
             return
         }
 
-        let backupURL = logDirectory.appendingPathComponent("multiterm.log.old")
+        let backupURL = logDirectory.appendingPathComponent("macviber.log.old")
         try? fileManager.removeItem(at: backupURL)
         try? fileManager.moveItem(at: logFileURL, to: backupURL)
     }

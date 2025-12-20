@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MultiTerm Setup Script
+# MacViber Setup Script
 # Automatically checks dependencies and builds the project
 
 set -e
@@ -21,7 +21,7 @@ REQUIRED_SWIFT_VERSION="5.9"
 MIN_MACOS_VERSION="14.0"
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   MultiTerm Setup Script v1.0.0       ║${NC}"
+echo -e "${BLUE}║   MacViber Setup Script v1.0.0       ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -105,8 +105,8 @@ if [ ! -f "$PROJECT_DIR/Package.swift" ]; then
 fi
 print_success "Package.swift found"
 
-if [ ! -d "$PROJECT_DIR/MultiTerm" ]; then
-    print_error "MultiTerm source directory not found"
+if [ ! -d "$PROJECT_DIR/MacViber" ]; then
+    print_error "MacViber source directory not found"
 fi
 print_success "Source directory found"
 
@@ -152,7 +152,7 @@ if [ -f "Package.resolved" ]; then
 fi
 
 # Step 6: Build project
-print_section "Building MultiTerm..."
+print_section "Building MacViber..."
 
 # Ask user if they want to build now
 echo ""
@@ -180,7 +180,7 @@ case $BUILD_OPTION in
         if swift build -c release; then
             print_success "Release build completed successfully"
             echo ""
-            echo "Binary location: .build/release/MultiTerm"
+            echo "Binary location: .build/release/MacViber"
         else
             print_error "Build failed"
         fi
@@ -219,5 +219,5 @@ echo "  • DEVELOPMENT_GUIDE.md   - Developer documentation"
 echo "  • docs/LICENSES.md       - Third-party licenses"
 echo ""
 echo "For issues and contributions, visit:"
-echo "  https://github.com/your-username/MultiTerm"
+echo "  https://github.com/your-username/MacViber"
 echo ""

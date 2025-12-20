@@ -5,7 +5,7 @@ final class SyntaxHighlightingInstaller {
     static let shared = SyntaxHighlightingInstaller()
 
     private let zshrcPath: String
-    private let markerComment = "# MultiTerm: zsh-syntax-highlighting configuration"
+    private let markerComment = "# MacViber: zsh-syntax-highlighting configuration"
 
     private init() {
         self.zshrcPath = NSHomeDirectory() + "/.zshrc"
@@ -62,8 +62,8 @@ final class SyntaxHighlightingInstaller {
 
         var content = try String(contentsOfFile: zshrcPath, encoding: .utf8)
 
-        // Remove existing MultiTerm color configuration
-        content = removeMultiTermConfig(from: content)
+        // Remove existing MacViber color configuration
+        content = removeMacViberConfig(from: content)
 
         // Add new configuration if color is provided
         if let color = color {
@@ -82,8 +82,8 @@ final class SyntaxHighlightingInstaller {
 
         var content = try String(contentsOfFile: zshrcPath, encoding: .utf8)
 
-        // Remove existing MultiTerm color configuration
-        content = removeMultiTermConfig(from: content)
+        // Remove existing MacViber color configuration
+        content = removeMacViberConfig(from: content)
 
         // Add new configuration
         let config = generateSyntaxColorConfig(colors: colors)
@@ -119,8 +119,8 @@ final class SyntaxHighlightingInstaller {
         // Read existing .zshrc or create new
         if FileManager.default.fileExists(atPath: zshrcPath) {
             content = try String(contentsOfFile: zshrcPath, encoding: .utf8)
-            // Remove existing MultiTerm configuration
-            content = removeMultiTermConfig(from: content)
+            // Remove existing MacViber configuration
+            content = removeMacViberConfig(from: content)
         }
 
         // Generate configuration block
@@ -154,7 +154,7 @@ final class SyntaxHighlightingInstaller {
             config += "\n" + generateColorConfig(color: color)
         }
 
-        config += "\n# End MultiTerm configuration\n"
+        config += "\n# End MacViber configuration\n"
 
         return config
     }
@@ -162,7 +162,7 @@ final class SyntaxHighlightingInstaller {
     private func generateColorConfig(color: TerminalTheme.ThemeColor) -> String {
         let hexColor = color.hexString.replacingOccurrences(of: "#", with: "")
         return """
-        # MultiTerm: Custom command highlight color
+        # MacViber: Custom command highlight color
         ZSH_HIGHLIGHT_STYLES[command]='fg=#\(hexColor)'
         ZSH_HIGHLIGHT_STYLES[builtin]='fg=#\(hexColor)'
         ZSH_HIGHLIGHT_STYLES[alias]='fg=#\(hexColor)'
@@ -196,27 +196,27 @@ final class SyntaxHighlightingInstaller {
         ZSH_HIGHLIGHT_STYLES[double-hyphen-option]='fg=\(colors.option.hexString)'
         ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=\(colors.error.hexString),bold'
         ZSH_HIGHLIGHT_STYLES[comment]='fg=\(colors.comment.hexString)'
-        # End MultiTerm configuration
+        # End MacViber configuration
         """
     }
 
-    private func removeMultiTermConfig(from content: String) -> String {
+    private func removeMacViberConfig(from content: String) -> String {
         let lines = content.components(separatedBy: "\n")
         var result: [String] = []
-        var inMultiTermBlock = false
+        var inMacViberBlock = false
         var skipUntilEndOrNextSection = false
 
         for line in lines {
-            // Check for any MultiTerm marker (current or legacy)
-            if line.contains(markerComment) || line.contains("# MultiTerm: Custom command highlight color") {
-                inMultiTermBlock = true
+            // Check for any MacViber marker (current or legacy)
+            if line.contains(markerComment) || line.contains("# MacViber: Custom command highlight color") {
+                inMacViberBlock = true
                 skipUntilEndOrNextSection = !line.contains(markerComment) // Legacy block has no end marker
                 continue
             }
 
             // End marker for new format
-            if inMultiTermBlock && line.contains("# End MultiTerm configuration") {
-                inMultiTermBlock = false
+            if inMacViberBlock && line.contains("# End MacViber configuration") {
+                inMacViberBlock = false
                 skipUntilEndOrNextSection = false
                 continue
             }
@@ -227,14 +227,14 @@ final class SyntaxHighlightingInstaller {
                     continue
                 } else {
                     // End of legacy block
-                    inMultiTermBlock = false
+                    inMacViberBlock = false
                     skipUntilEndOrNextSection = false
                     result.append(line)
                     continue
                 }
             }
 
-            if !inMultiTermBlock {
+            if !inMacViberBlock {
                 result.append(line)
             }
         }
