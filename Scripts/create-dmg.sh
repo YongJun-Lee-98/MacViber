@@ -4,9 +4,11 @@ set -e
 # Get script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+INFO_PLIST="${PROJECT_ROOT}/MacViber/Resources/Info.plist"
 
 APP_NAME="MacViber"
-VERSION="${1:-1.0.0}"
+# Read version from Info.plist (source of truth), or use argument if provided
+VERSION="${1:-$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")}"
 BUILD_DIR="${PROJECT_ROOT}/build"
 DMG_NAME="${APP_NAME}-v${VERSION}.dmg"
 BACKGROUND="${SCRIPT_DIR}/dmg-resources/background.png"
