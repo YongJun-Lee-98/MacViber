@@ -36,6 +36,8 @@ struct ViewLineInfo {
     var images: [TerminalImage]?
     // Cell positions for each character (needed for wide characters like Korean/CJK)
     var cellPositions: [Int]
+    // Width in terminal columns for each character (1 for normal, 2 for wide chars like Korean/CJK)
+    var charWidths: [Int]
 }
 
 extension TerminalView {
@@ -419,11 +421,13 @@ extension TerminalView {
         var attr = Attribute.empty
         var hasUrl = false
         var cellPositions: [Int] = []
+        var charWidths: [Int] = []
 
         var str = prefix
         // Track positions for prefix characters (if any)
         for i in 0..<prefix.count {
             cellPositions.append(i)
+            charWidths.append(1)  // Prefix characters are always width 1
         }
 
         for col in 0..<cols {
@@ -451,6 +455,7 @@ extension TerminalView {
             if ch.code != 0 {
                 str.append(ch.getCharacter())
                 cellPositions.append(col)  // Track actual cell position
+                charWidths.append(Int(ch.width))  // Track character width (1 or 2)
             }
         }
         let finalAttrs = getAttributes(attr, withUrl: hasUrl)
@@ -465,7 +470,7 @@ extension TerminalView {
         // This gives us a large chunk of our performance back, from 7.5 to 5.5 seconds on
         // time for x in 1 2 3 4 5 6; do cat UTF-8-demo.txt; done
         //res.fixAttributes(in: NSRange(location: 0, length: res.length))
-        return ViewLineInfo(attrStr: res, images: line.images, cellPositions: cellPositions)
+        return ViewLineInfo(attrStr: res, images: line.images, cellPositions: cellPositions, charWidths: charWidths)
     }
     
     
@@ -730,7 +735,12 @@ extension TerminalView {
 
                     let transform = CGAffineTransform (translationX: positions[0].x, y: 0)
 
-                    var size = CGSize (width: CGFloat (cellDimension.width * CGFloat(runGlyphsCount)), height: cellDimension.height)
+                    // Calculate width based on terminal columns, not glyph count (for wide chars like Korean/CJK)
+                    let totalCellWidth = (0..<runGlyphsCount).reduce(0) { sum, i in
+                        let idx = col + i
+                        return sum + (idx < lineInfo.charWidths.count ? lineInfo.charWidths[idx] : 1)
+                    }
+                    var size = CGSize(width: CGFloat(cellDimension.width) * CGFloat(totalCellWidth), height: cellDimension.height)
                     var origin: CGPoint = lineOrigin
 
                     #if (lastLineExtends)
