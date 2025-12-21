@@ -205,7 +205,9 @@ class CustomTerminalView: LocalProcessTerminalView {
     // Output buffering for reduced CPU usage
     private var outputBuffer: [UInt8] = []
     private var outputFlushTask: DispatchWorkItem?
-    private let outputFlushDelay: TimeInterval = 0.05
+    private var outputFlushDelay: TimeInterval {
+        TerminalSettingsManager.shared.outputFlushDelay
+    }
 
     // IME (Korean input) support
     private var markedTextString: String = ""

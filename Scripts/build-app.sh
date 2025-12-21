@@ -8,12 +8,18 @@ set -e
 # Configuration
 APP_NAME="MacViber"
 BUNDLE_ID="com.macviber.app"
-VERSION="1.1.0"
-BUILD_NUMBER="2"
 
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+INFO_PLIST="$PROJECT_DIR/MacViber/Resources/Info.plist"
+
+# Read version from Info.plist (source of truth)
+VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
+BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO_PLIST")
+echo "📋 Version: $VERSION ($BUILD_NUMBER) from Info.plist"
+
+# Build paths
 BUILD_DIR="$PROJECT_DIR/.build/release"
 APP_BUNDLE="$PROJECT_DIR/build/${APP_NAME}.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"

@@ -5,7 +5,7 @@ macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표�
 
 ## Download
 
-[**MacViber-v1.1.1.dmg**](https://github.com/YongJun-Lee-98/MacViber/releases/download/v1.1.1/MacViber-v1.1.1.dmg)
+[**MacViber-v1.1.2.dmg**](https://github.com/YongJun-Lee-98/MacViber/releases/download/v1.1.2/MacViber-v1.1.2.dmg)
 
 > macOS 14.0 (Sonoma) 이상 필요
 

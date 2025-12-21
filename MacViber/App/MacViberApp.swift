@@ -11,6 +11,7 @@ struct MacViberApp: App {
     @State private var showingThemePicker = false
     @State private var showingColorSettings = false
     @State private var showingNotificationSettings = false
+    @State private var showingTerminalSettings = false
 
     init() {
         Logger.shared.info("MacViber app started")
@@ -32,6 +33,9 @@ struct MacViberApp: App {
                 .sheet(isPresented: $showingNotificationSettings) {
                     NotificationSettingsView()
                 }
+                .sheet(isPresented: $showingTerminalSettings) {
+                    TerminalSettingsView()
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .showThemePicker)) { _ in
                     showingThemePicker = true
                 }
@@ -40,6 +44,9 @@ struct MacViberApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .showNotificationSettings)) { _ in
                     showingNotificationSettings = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .showTerminalSettings)) { _ in
+                    showingTerminalSettings = true
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .checkForUpdatesRequested)) { _ in
                     Task {
@@ -163,6 +170,11 @@ struct MacViberApp: App {
 
             // Settings menu
             CommandMenu("Settings") {
+                Button("Terminal Settings...") {
+                    NotificationCenter.default.post(name: .showTerminalSettings, object: nil)
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+
                 Button("Notification Settings...") {
                     NotificationCenter.default.post(name: .showNotificationSettings, object: nil)
                 }
@@ -222,6 +234,7 @@ extension Notification.Name {
     static let showThemePicker = Notification.Name("showThemePicker")
     static let showColorSettings = Notification.Name("showColorSettings")
     static let showNotificationSettings = Notification.Name("showNotificationSettings")
+    static let showTerminalSettings = Notification.Name("showTerminalSettings")
     static let hideNotificationGrid = Notification.Name("hideNotificationGrid")
     static let toggleRightSidebar = Notification.Name("toggleRightSidebar")
     static let checkForUpdatesRequested = Notification.Name("checkForUpdatesRequested")
