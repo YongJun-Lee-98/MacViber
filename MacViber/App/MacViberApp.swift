@@ -6,6 +6,7 @@ struct MacViberApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var themeManager = ThemeManager.shared
+    @StateObject private var updateChecker = UpdateChecker.shared
     @State private var showingShortcuts = false
     @State private var showingThemePicker = false
     @State private var showingColorSettings = false
@@ -39,6 +40,23 @@ struct MacViberApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .showNotificationSettings)) { _ in
                     showingNotificationSettings = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .checkForUpdatesRequested)) { _ in
+                    Task {
+                        await updateChecker.checkForUpdatesManually()
+                    }
+                }
+                .sheet(isPresented: $updateChecker.showUpdateSheet) {
+                    UpdateAlertView(updateChecker: updateChecker)
+                }
+                .alert("You're up to date!", isPresented: $updateChecker.showUpToDateAlert) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text("MacViber \(updateChecker.currentVersion) is the latest version.")
+                }
+                .task {
+                    // 앱 시작 시 자동 업데이트 체크 (백그라운드)
+                    await updateChecker.checkForUpdatesAutomatically()
                 }
         }
         .windowStyle(.titleBar)
@@ -159,6 +177,12 @@ struct MacViberApp: App {
 
                 Divider()
 
+                Button("Check for Updates...") {
+                    NotificationCenter.default.post(name: .checkForUpdatesRequested, object: nil)
+                }
+
+                Divider()
+
                 Button("Open Log File") {
                     let logPath = Logger.shared.logFilePath
                     let logURL = URL(fileURLWithPath: logPath)
@@ -200,6 +224,7 @@ extension Notification.Name {
     static let showNotificationSettings = Notification.Name("showNotificationSettings")
     static let hideNotificationGrid = Notification.Name("hideNotificationGrid")
     static let toggleRightSidebar = Notification.Name("toggleRightSidebar")
+    static let checkForUpdatesRequested = Notification.Name("checkForUpdatesRequested")
 }
 
 // MARK: - Keyboard Shortcuts View
