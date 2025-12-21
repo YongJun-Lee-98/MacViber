@@ -10,7 +10,8 @@ Claude Code를 사용하여 MacViber을 처음부터 다시 만들 때 참고할
 macOS SwiftUI 앱 "MacViber"을 만들어줘.
 - Swift Package Manager 사용
 - SwiftTerm 라이브러리 의존성 추가 (https://github.com/migueldeicaza/SwiftTerm)
-- 최소 macOS 13.0 타겟
+- swift-markdown-ui 라이브러리 의존성 추가 (v2.4.0+, Notes 기능용)
+- 최소 macOS 14.0 (Sonoma) 타겟
 - 앱 번들 생성용 build-app.sh 스크립트 포함
 ```
 
@@ -20,18 +21,72 @@ macOS SwiftUI 앱 "MacViber"을 만들어줘.
 MacViber/
 ├── Package.swift
 ├── Scripts/
-│   └── build-app.sh
+│   ├── build-app.sh
+│   ├── install-app.sh
+│   ├── setup.sh
+│   └── create-dmg.sh
+├── LocalPackages/
+│   └── SwiftTerm/              # 로컬 SwiftTerm 패키지
 └── MacViber/
-    ├── MacViberApp.swift
+    ├── App/
+    │   └── MacViberApp.swift
     ├── Core/
+    │   ├── Logger.swift
     │   ├── Terminal/
-    │   └── Utilities/
+    │   │   ├── TerminalController.swift
+    │   │   └── TerminalConfiguration.swift
+    │   └── Parser/
+    │       ├── ClaudeNotificationDetector.swift
+    │       └── CustomPatternMatcher.swift
     ├── Domain/
     │   ├── Models/
+    │   │   ├── TerminalSession.swift
+    │   │   ├── TerminalTheme.swift
+    │   │   ├── SplitNode.swift
+    │   │   ├── ClaudeNotification.swift
+    │   │   ├── CustomPattern.swift
+    │   │   ├── Note.swift
+    │   │   ├── NotificationPreferences.swift
+    │   │   └── CustomColorSettings.swift
     │   └── Services/
-    └── Presentation/
-        ├── Views/
-        └── ViewModels/
+    │       ├── SessionManager.swift
+    │       ├── ThemeManager.swift
+    │       ├── FavoritesManager.swift
+    │       ├── NoteManager.swift
+    │       ├── NotificationPreferencesManager.swift
+    │       └── SyntaxHighlightingInstaller.swift
+    ├── Presentation/
+    │   ├── ViewModels/
+    │   │   ├── MainViewModel.swift
+    │   │   ├── TerminalListViewModel.swift
+    │   │   ├── NotificationGridViewModel.swift
+    │   │   ├── NotificationSettingsViewModel.swift
+    │   │   └── NoteViewModel.swift
+    │   └── Views/
+    │       ├── MainView.swift
+    │       ├── Components/
+    │       │   └── ResizableSidebar.swift
+    │       ├── Terminal/
+    │       │   ├── TerminalView.swift
+    │       │   ├── TerminalPaneView.swift
+    │       │   └── SplitTerminalView.swift
+    │       ├── Sidebar/
+    │       │   ├── TerminalListView.swift
+    │       │   └── FavoritesView.swift
+    │       ├── Notification/
+    │       │   ├── NotificationGridView.swift
+    │       │   └── NotificationCardView.swift
+    │       ├── Settings/
+    │       │   ├── ThemePickerView.swift
+    │       │   ├── ColorSettingsView.swift
+    │       │   ├── NotificationSettingsView.swift
+    │       │   └── CustomPatternEditorView.swift
+    │       └── Note/
+    │           ├── MarkdownEditorView.swift
+    │           ├── MarkdownPreviewView.swift
+    │           └── RightSidebarView.swift
+    └── Resources/
+        └── Info.plist
 ```
 
 ---
@@ -908,7 +963,461 @@ struct SplitContainerView: View {
 
 ---
 
-## 요약: 개발 순서 (업데이트)
+## 14단계: IME 지원 (한글 입력)
+
+```
+CustomTerminalView에 IME(Input Method Editor) 지원 추가:
+
+NSTextInputClient 프로토콜 구현:
+- setMarkedText(_:selectedRange:replacementRange:)
+- unmarkText()
+- hasMarkedText
+- markedRange(), selectedRange()
+- attributedSubstring(forProposedRange:actualRange:)
+- validAttributesForMarkedText
+- firstRect(forCharacterRange:actualRange:)
+- characterIndex(for:)
+- insertText(_:replacementRange:)
+```
+
+### 핵심 코드 패턴
+
+```swift
+class CustomTerminalView: LocalProcessTerminalView, NSTextInputClient {
+    private var markedTextString: String = ""
+    private var markedTextRange: NSRange = NSRange(location: NSNotFound, length: 0)
+
+    override func keyDown(with event: NSEvent) {
+        // IME 입력 처리를 위해 inputContext로 전달
+        inputContext?.handleEvent(event)
+    }
+
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        if let str = string as? String {
+            markedTextString = str
+            markedTextRange = NSRange(location: 0, length: str.count)
+        } else if let attrStr = string as? NSAttributedString {
+            markedTextString = attrStr.string
+            markedTextRange = NSRange(location: 0, length: attrStr.length)
+        }
+        needsDisplay = true
+    }
+
+    func unmarkText() {
+        markedTextString = ""
+        markedTextRange = NSRange(location: NSNotFound, length: 0)
+    }
+
+    func insertText(_ string: Any, replacementRange: NSRange) {
+        let text: String
+        if let str = string as? String {
+            text = str
+        } else if let attrStr = string as? NSAttributedString {
+            text = attrStr.string
+        } else {
+            return
+        }
+        // 터미널에 텍스트 전송
+        send(txt: text)
+        unmarkText()
+    }
+
+    var hasMarkedText: Bool {
+        return !markedTextString.isEmpty
+    }
+}
+```
+
+> ⚠️ **주의**: `keyDown`에서 `super.keyDown(with:)` 호출 전에 `inputContext?.handleEvent(event)`를 먼저 호출해야 함.
+
+---
+
+## 15단계: Dock Badge
+
+```
+읽지 않은 알림 개수를 Dock 아이콘에 표시:
+
+SessionManager에 updateDockBadge() 메서드:
+- 읽지 않은 알림 개수 계산
+- NSApp.dockTile.badgeLabel 설정
+- 0개면 빈 문자열로 배지 제거
+```
+
+### 핵심 코드 패턴
+
+```swift
+// SessionManager.swift
+func updateDockBadge() {
+    let unreadCount = notifications.filter { !$0.isRead }.count
+
+    DispatchQueue.main.async {
+        if unreadCount > 0 {
+            NSApp.dockTile.badgeLabel = "\(unreadCount)"
+        } else {
+            NSApp.dockTile.badgeLabel = ""
+        }
+    }
+}
+
+// 알림 발생 시 호출
+func handleNotification(_ notification: ClaudeNotification) {
+    notifications.append(notification)
+    updateDockBadge()
+    // 시스템 알림 표시...
+}
+
+// 알림 읽음 처리 시 호출
+func markNotificationAsRead(_ id: UUID) {
+    if let index = notifications.firstIndex(where: { $0.id == id }) {
+        notifications[index].isRead = true
+        updateDockBadge()
+    }
+}
+```
+
+---
+
+## 16단계: Syntax Highlighting 설치
+
+```
+zsh 구문 강조 자동 설치 기능:
+
+SyntaxHighlightingInstaller:
+- Homebrew로 zsh-syntax-highlighting 설치 확인
+- ~/.zshrc에 source 라인 추가
+- 설치 상태 확인 메서드
+
+SyntaxHighlightColors (TerminalTheme 내):
+- command: 명령어 색상
+- string: 문자열 색상
+- option: 옵션/플래그 색상
+- path: 경로 색상
+- error: 에러 색상
+```
+
+### 핵심 코드 패턴
+
+```swift
+class SyntaxHighlightingInstaller {
+    static let shared = SyntaxHighlightingInstaller()
+
+    private let highlightingPath = "/opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+    private let sourceCommand: String
+
+    init() {
+        sourceCommand = "source \(highlightingPath)"
+    }
+
+    func isInstalled() -> Bool {
+        FileManager.default.fileExists(atPath: highlightingPath)
+    }
+
+    func isConfigured() -> Bool {
+        guard let zshrc = try? String(contentsOfFile: NSHomeDirectory() + "/.zshrc") else {
+            return false
+        }
+        return zshrc.contains(sourceCommand)
+    }
+
+    func install() async throws {
+        // Homebrew로 설치
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/brew")
+        process.arguments = ["install", "zsh-syntax-highlighting"]
+        try process.run()
+        process.waitUntilExit()
+    }
+
+    func configure() throws {
+        let zshrcPath = NSHomeDirectory() + "/.zshrc"
+        var content = (try? String(contentsOfFile: zshrcPath)) ?? ""
+        content += "\n\n# Syntax highlighting\n\(sourceCommand)\n"
+        try content.write(toFile: zshrcPath, atomically: true, encoding: .utf8)
+    }
+}
+```
+
+---
+
+## 17단계: Custom Color Settings
+
+```
+사용자 커스텀 색상 시스템:
+
+CustomColorSettings:
+- useCustomBackground: Bool
+- useCustomForeground: Bool
+- backgroundColor: ThemeColor?
+- foregroundColor: ThemeColor?
+- UserDefaults에 저장
+
+ThemeManager 확장:
+- @Published customColors: CustomColorSettings
+- effectiveBackgroundColor: 커스텀 또는 테마 색상
+- effectiveForegroundColor: 커스텀 또는 테마 색상
+```
+
+### 핵심 코드 패턴
+
+```swift
+struct CustomColorSettings: Codable {
+    var useCustomBackground: Bool = false
+    var useCustomForeground: Bool = false
+    var backgroundColor: ThemeColor?
+    var foregroundColor: ThemeColor?
+}
+
+class ThemeManager: ObservableObject {
+    @Published var currentTheme: TerminalTheme
+    @Published var customColors: CustomColorSettings
+
+    var effectiveBackgroundColor: NSColor {
+        if customColors.useCustomBackground, let bg = customColors.backgroundColor {
+            return bg.nsColor
+        }
+        return currentTheme.background.nsColor
+    }
+
+    var effectiveForegroundColor: NSColor {
+        if customColors.useCustomForeground, let fg = customColors.foregroundColor {
+            return fg.nsColor
+        }
+        return currentTheme.foreground.nsColor
+    }
+}
+```
+
+---
+
+## 18단계: Notification Preferences
+
+```
+알림 필터링 및 자동 핸들 설정:
+
+NotificationPreferences:
+- enableSystemNotifications: Bool
+- enableSoundAlerts: Bool
+- autoHandlePermissions: Bool (자동으로 Allow 클릭)
+- mutedSessionIds: Set<UUID> (음소거된 세션)
+- mutedPatternTypes: Set<NotificationType>
+
+NotificationPreferencesManager:
+- @Published preferences: NotificationPreferences
+- UserDefaults에 저장
+- shouldNotify(session:, type:) -> Bool
+```
+
+### 핵심 코드 패턴
+
+```swift
+struct NotificationPreferences: Codable {
+    var enableSystemNotifications: Bool = true
+    var enableSoundAlerts: Bool = true
+    var autoHandlePermissions: Bool = false
+    var mutedSessionIds: Set<UUID> = []
+    var mutedPatternTypes: Set<String> = []  // NotificationType.rawValue
+}
+
+class NotificationPreferencesManager: ObservableObject {
+    static let shared = NotificationPreferencesManager()
+
+    @Published var preferences: NotificationPreferences {
+        didSet { save() }
+    }
+
+    func shouldNotify(sessionId: UUID, type: NotificationType) -> Bool {
+        guard preferences.enableSystemNotifications else { return false }
+        guard !preferences.mutedSessionIds.contains(sessionId) else { return false }
+        guard !preferences.mutedPatternTypes.contains(type.rawValue) else { return false }
+        return true
+    }
+
+    func toggleMuteSession(_ sessionId: UUID) {
+        if preferences.mutedSessionIds.contains(sessionId) {
+            preferences.mutedSessionIds.remove(sessionId)
+        } else {
+            preferences.mutedSessionIds.insert(sessionId)
+        }
+    }
+}
+```
+
+---
+
+## 19단계: Custom Pattern Editor
+
+```
+사용자 정의 알림 패턴 추가 기능:
+
+CustomPattern:
+- id: UUID
+- name: String
+- pattern: String (정규식)
+- type: NotificationType
+- isEnabled: Bool
+
+CustomPatternMatcher:
+- patterns: [CustomPattern]
+- UserDefaults에 저장
+- match(text:) -> NotificationType?
+
+CustomPatternEditorView:
+- 패턴 목록 표시
+- 추가/편집/삭제 UI
+- 정규식 테스트 기능
+```
+
+### 핵심 코드 패턴
+
+```swift
+struct CustomPattern: Identifiable, Codable {
+    var id = UUID()
+    var name: String
+    var pattern: String
+    var type: NotificationType
+    var isEnabled: Bool = true
+
+    var compiledRegex: NSRegularExpression? {
+        try? NSRegularExpression(pattern: pattern, options: .caseInsensitive)
+    }
+}
+
+class CustomPatternMatcher: ObservableObject {
+    static let shared = CustomPatternMatcher()
+
+    @Published var patterns: [CustomPattern] = [] {
+        didSet { save() }
+    }
+
+    func match(text: String) -> NotificationType? {
+        for pattern in patterns where pattern.isEnabled {
+            guard let regex = pattern.compiledRegex else { continue }
+            let range = NSRange(text.startIndex..., in: text)
+            if regex.firstMatch(in: text, range: range) != nil {
+                return pattern.type
+            }
+        }
+        return nil
+    }
+}
+```
+
+---
+
+## 20단계: Logger
+
+```
+전역 로깅 시스템:
+
+Logger:
+- static func debug(_:), info(_:), warning(_:), error(_:)
+- 로그 레벨 필터링
+- 파일/콘솔 출력 옵션
+```
+
+### 핵심 코드 패턴
+
+```swift
+enum LogLevel: Int, Comparable {
+    case debug = 0
+    case info = 1
+    case warning = 2
+    case error = 3
+
+    static func < (lhs: LogLevel, rhs: LogLevel) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+class Logger {
+    static var minimumLevel: LogLevel = .info
+
+    static func debug(_ message: String, file: String = #file, line: Int = #line) {
+        log(.debug, message, file: file, line: line)
+    }
+
+    static func info(_ message: String, file: String = #file, line: Int = #line) {
+        log(.info, message, file: file, line: line)
+    }
+
+    static func warning(_ message: String, file: String = #file, line: Int = #line) {
+        log(.warning, message, file: file, line: line)
+    }
+
+    static func error(_ message: String, file: String = #file, line: Int = #line) {
+        log(.error, message, file: file, line: line)
+    }
+
+    private static func log(_ level: LogLevel, _ message: String, file: String, line: Int) {
+        guard level >= minimumLevel else { return }
+
+        let fileName = (file as NSString).lastPathComponent
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        print("[\(timestamp)] [\(level)] [\(fileName):\(line)] \(message)")
+    }
+}
+```
+
+---
+
+## 21단계: Resizable Sidebar
+
+```
+Notes 사이드바 너비 조절 기능:
+
+ResizableSidebar:
+- @Binding width: CGFloat
+- 최소/최대 너비 제약
+- 드래그 가능한 divider
+- 더블 클릭으로 기본 너비 복원
+```
+
+### 핵심 코드 패턴
+
+```swift
+struct ResizableSidebar<Content: View>: View {
+    @Binding var width: CGFloat
+    let minWidth: CGFloat
+    let maxWidth: CGFloat
+    let defaultWidth: CGFloat
+    let content: () -> Content
+
+    @State private var isDragging = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Draggable divider
+            Rectangle()
+                .fill(isDragging ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.2))
+                .frame(width: 4)
+                .onHover { hovering in
+                    if hovering { NSCursor.resizeLeftRight.push() }
+                    else { NSCursor.pop() }
+                }
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            isDragging = true
+                            let newWidth = width - value.translation.width
+                            width = min(max(newWidth, minWidth), maxWidth)
+                        }
+                        .onEnded { _ in isDragging = false }
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation { width = defaultWidth }
+                }
+
+            // Content
+            content()
+                .frame(width: width)
+        }
+    }
+}
+```
+
+---
+
+## 요약: 개발 순서 (최종)
 
 1. **프로젝트 설정** - Package.swift, 기본 구조
 2. **모델** - TerminalSession, SplitNode, SplitViewState
@@ -920,7 +1429,14 @@ struct SplitContainerView: View {
 8. **SplitTerminalView** - 재귀적 분할 뷰
 9. **사이드바** - TerminalListView, FavoritesView
 10. **키보드 단축키** - Commands
-11. **알림 시스템** - Claude Code 연동, CustomPattern
+11. **알림 시스템** - Claude Code 연동
 12. **Notes 사이드바** - Markdown 편집/미리보기
 13. **CPU 최적화** - 정규식 캐싱, 쓰로틀링, 버퍼링
-14. **Split View 비율 제어** - GeometryReader + 커스텀 divider
+14. **IME 지원** - 한글 입력 (NSTextInputClient)
+15. **Dock Badge** - 읽지 않은 알림 개수 표시
+16. **Syntax Highlighting** - zsh 구문 강조 설치
+17. **Custom Color Settings** - 사용자 커스텀 색상
+18. **Notification Preferences** - 알림 필터링/자동 핸들
+19. **Custom Pattern Editor** - 사용자 정의 알림 패턴
+20. **Logger** - 전역 로깅 시스템
+21. **Resizable Sidebar** - Notes 사이드바 너비 조절
