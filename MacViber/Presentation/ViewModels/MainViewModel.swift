@@ -248,6 +248,27 @@ class MainViewModel: ObservableObject {
         }
     }
 
+    /// Navigate the current focused terminal to the specified directory
+    func navigateToDirectory(_ url: URL) {
+        // Get the target session ID based on current view mode
+        let targetSessionId: UUID?
+        if isSplitViewActive, let paneId = focusedPaneId {
+            targetSessionId = splitViewRoot?.sessionId(for: paneId)
+        } else {
+            targetSessionId = selectedSessionId
+        }
+
+        guard let sessionId = targetSessionId,
+              let controller = sessionManager.controller(for: sessionId) else {
+            // Fallback: create new terminal if none is selected
+            addNewTerminal(at: url)
+            return
+        }
+
+        // Send cd command to the current terminal
+        controller.sendInput("cd \"\(url.path)\" && clear\n")
+    }
+
     func addFavoriteFolder() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false

@@ -219,6 +219,11 @@ class UpdateChecker: ObservableObject {
             // 업데이트 시트 닫기
             showUpdateSheet = false
 
+            // DMG가 열릴 시간을 주고 앱 종료
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                NSApplication.shared.terminate(nil)
+            }
+
         } catch let error as UpdateError {
             throw error
         } catch {

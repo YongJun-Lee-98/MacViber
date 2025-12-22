@@ -90,8 +90,9 @@ fi
 
 # Clear caches
 echo "🧹 Clearing caches..."
-rm -rf "$PROJECT_DIR/.build"
-rm -rf "$PROJECT_DIR/build"
+# Force remove with retry for locked files
+rm -rf "$PROJECT_DIR/.build" 2>/dev/null || (sleep 1 && rm -rf "$PROJECT_DIR/.build" 2>/dev/null) || true
+rm -rf "$PROJECT_DIR/build" 2>/dev/null || true
 rm -rf ~/Library/Caches/com.macviber.app 2>/dev/null || true
 
 echo "🔨 Building $APP_NAME..."

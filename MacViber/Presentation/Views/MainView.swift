@@ -12,7 +12,7 @@ struct MainView: View {
             TerminalListView(
                 viewModel: terminalListViewModel,
                 onOpenFavorite: { url in
-                    viewModel.addNewTerminal(at: url)
+                    viewModel.navigateToDirectory(url)
                 },
                 onAddFavorite: {
                     viewModel.addFavoriteFolder()
