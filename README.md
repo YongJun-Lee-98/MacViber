@@ -1,13 +1,34 @@
 # MacViber
 
-macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표시 기능 포함  
-<img width="1536" height="1024" alt="githubimg" src="https://github.com/user-attachments/assets/8d373ff8-3e72-4273-991d-a03692e093a3" />  
+macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표시 기능 포함
+<img width="1536" height="1024" alt="githubimg" src="https://github.com/user-attachments/assets/8d373ff8-3e72-4273-991d-a03692e093a3" />
 
-## Download
+## 빌드 및 설치
 
-[**MacViber-v1.2.13.app**](https://gofile.me/7Jk8C/asnfyLa1T)
+### 요구사항
+- macOS 14.0 (Sonoma) 이상
+- Swift 5.9 이상
+- Xcode 15.0 이상
 
-> macOS 14.0 (Sonoma) 이상 필요
+### 빠른 설치
+
+```bash
+# 1. 저장소 클론
+git clone https://github.com/YongJun-Lee-98/MacViber.git
+cd MacViber
+
+# 2. 앱 빌드 및 실행
+./Scripts/build-app.sh
+
+# 3. Applications 폴더에 설치 (선택)
+cp -R build/MacViber.app /Applications/
+```
+
+### 개발 모드 실행
+
+```bash
+swift run
+```
 
 ## 기능
 
@@ -22,76 +43,6 @@ macOS 다중 터미널 관리 앱 - Claude Code 알림 감지 및 그리드 표�
 - Claude Code 알림 자동 감지 (질문, 권한 요청, 완료, 에러)
 - 알림 발생 시 그리드 분할 화면으로 표시
 - 시스템 알림 연동 (macOS Notification Center)
-
-## Installation
-
-### Prerequisites
-
-- macOS 14.0 (Sonoma) or later
-- Swift 5.9 or later
-- Xcode 15.0 or later (for building)
-
-### Quick Setup
-
-Run the automated setup script:
-
-```bash
-./Scripts/setup.sh
-```
-
-The script will:
-1. Verify Swift and macOS versions
-2. Check Xcode Command Line Tools
-3. Resolve package dependencies
-4. Offer to build the project
-
-### Manual Setup
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/YongJun-Lee-98/MacViber.git
-cd MacViber
-
-# 2. Resolve dependencies
-swift package resolve
-
-# 3. Build the project
-swift build -c release
-```
-
-## 요구사항
-
-- macOS 14.0 (Sonoma) 이상
-- Xcode 15.0 이상 (빌드 시)
-
-## 빌드 및 설치
-
-### 앱 번들 빌드 (권장)
-
-```bash
-./Scripts/build-app.sh
-```
-
-빌드 완료 후:
-```bash
-# 앱 실행
-open build/MacViber.app
-
-# Applications 폴더에 설치
-cp -R build/MacViber.app /Applications/
-```
-
-### 개발 모드 실행
-
-```bash
-swift run
-```
-
-### Xcode에서 열기
-
-```bash
-open Package.swift
-```
 
 ## 사용법
 
