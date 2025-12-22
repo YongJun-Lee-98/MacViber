@@ -978,6 +978,12 @@ extension TerminalView {
         updateDisplay (notifyAccessibility: true)
         updateDebugDisplay()
         pendingDisplay = false
+
+        // Check if additional display update was requested while we were updating
+        if needsAdditionalDisplay {
+            needsAdditionalDisplay = false
+            queuePendingDisplay()
+        }
     }
     
     //
@@ -998,6 +1004,9 @@ extension TerminalView {
             DispatchQueue.main.asyncAfter(
                 deadline: DispatchTime (uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + UInt64 (fpsDelay)),
                 execute: updateDisplay)
+        } else {
+            // Mark that additional display update is needed after current one completes
+            needsAdditionalDisplay = true
         }
     }
     

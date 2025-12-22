@@ -90,6 +90,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     var search: SearchService!
     var debug: TerminalDebugView?
     var pendingDisplay: Bool = false
+    var needsAdditionalDisplay: Bool = false
     var pendingResize: DispatchWorkItem?
     
     var cellDimension: CellDimension!
@@ -184,7 +185,9 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
     
     var becomeMainObserver, resignMainObserver: NSObjectProtocol?
-    
+    var becomeKeyObserver, resignKeyObserver: NSObjectProtocol?
+    var becomeActiveObserver: NSObjectProtocol?
+
     deinit {
         if let becomeMainObserver {
             NotificationCenter.default.removeObserver (becomeMainObserver)
@@ -192,18 +195,104 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         if let resignMainObserver {
             NotificationCenter.default.removeObserver (resignMainObserver)
         }
+        if let becomeKeyObserver {
+            NotificationCenter.default.removeObserver(becomeKeyObserver)
+        }
+        if let resignKeyObserver {
+            NotificationCenter.default.removeObserver(resignKeyObserver)
+        }
+        if let becomeActiveObserver {
+            NotificationCenter.default.removeObserver(becomeActiveObserver)
+        }
     }
-    
+
     func setupFocusNotification() {
+        // Main window notifications (app foreground/background)
         becomeMainObserver = NotificationCenter.default.addObserver(forName: .init("NSWindowDidBecomeMainNotification"), object: nil, queue: nil) { [unowned self] notification in
+            debugLogger?("[FOCUS] didBecomeMainNotification fired")
             self.caretView.updateCursorStyle()
         }
         resignMainObserver = NotificationCenter.default.addObserver(forName: .init("NSWindowDidResignMainNotification"), object: nil, queue: nil) { [unowned self] notification in
+            debugLogger?("[FOCUS] didResignMainNotification fired")
             self.caretView.disableAnimations()
             self.caretView.updateView()
         }
+
+        // Key window notifications (keyboard input focus)
+        // This handles Notification Center, Spotlight, and other system overlays
+        becomeKeyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main) { [weak self] notification in
+                guard let self = self,
+                      let window = notification.object as? NSWindow,
+                      window == self.window else {
+                    self?.debugLogger?("[FOCUS] didBecomeKeyNotification: guard failed (window mismatch or self nil)")
+                    return
+                }
+
+                self.debugLogger?("[FOCUS] didBecomeKeyNotification: window=\(window), isKeyWindow=\(window.isKeyWindow)")
+                // Always restore first responder when window becomes key again
+                // This handles all key window loss scenarios:
+                // - Notification Center, Spotlight, Mission Control
+                // - Cmd+Tab app switching, file dialogs, menus, etc.
+                let result = window.makeFirstResponder(self)
+                self.debugLogger?("[FOCUS] didBecomeKeyNotification: makeFirstResponder returned \(result)")
+                self._hasFocus = true
+                self.caretView.focused = true
+                self.caretView.updateCursorStyle()
+                self.debugLogger?("[FOCUS] didBecomeKeyNotification: _hasFocus=true, caretView.focused=true")
+        }
+
+        resignKeyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: nil,
+            queue: .main) { [weak self] notification in
+                guard let self = self,
+                      let window = notification.object as? NSWindow,
+                      window == self.window else {
+                    self?.debugLogger?("[FOCUS] didResignKeyNotification: guard failed")
+                    return
+                }
+
+                self.debugLogger?("[FOCUS] didResignKeyNotification: window=\(window)")
+                self.caretView.disableAnimations()
+                self.caretView.updateView()
+        }
+
+        // App activation notification (handles Dock clicks)
+        // didBecomeKeyNotification may not fire when clicking app in Dock
+        becomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main) { [weak self] _ in
+                self?.debugLogger?("[FOCUS] didBecomeActiveNotification fired")
+                // Delay execution to next run loop iteration
+                // At notification time, window is not yet key/main
+                // After async dispatch, window state is updated
+                DispatchQueue.main.async {
+                    guard let self = self,
+                          let window = self.window else {
+                        self?.debugLogger?("[FOCUS] didBecomeActiveNotification (async): guard failed - self or window nil")
+                        return
+                    }
+
+                    self.debugLogger?("[FOCUS] didBecomeActiveNotification (async): isKeyWindow=\(window.isKeyWindow), isMainWindow=\(window.isMainWindow)")
+                    // Restore first responder when app becomes active (Dock click, etc.)
+                    if window.isKeyWindow || window.isMainWindow {
+                        let result = window.makeFirstResponder(self)
+                        self.debugLogger?("[FOCUS] didBecomeActiveNotification (async): makeFirstResponder returned \(result)")
+                        self._hasFocus = true
+                        self.caretView.focused = true
+                        self.caretView.updateCursorStyle()
+                        self.debugLogger?("[FOCUS] didBecomeActiveNotification (async): focus restored")
+                    } else {
+                        self.debugLogger?("[FOCUS] didBecomeActiveNotification (async): skipped - window not key/main")
+                    }
+                }
+        }
     }
-    
+
     func setupOptions ()
     {
         setupOptions (width: getEffectiveWidth (size: bounds.size), height: bounds.height)
@@ -459,10 +548,12 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     private var _hasFocus = false
     open var hasFocus : Bool {
         get {
-            //print ("hasFocus: \(_hasFocus) window=\(window?.isKeyWindow)")
-            return _hasFocus && (window?.isKeyWindow ?? true)
+            let result = _hasFocus && (window?.isKeyWindow ?? true)
+            debugLogger?("[FOCUS] hasFocus GET: _hasFocus=\(_hasFocus), window.isKeyWindow=\(window?.isKeyWindow ?? false), result=\(result)")
+            return result
         }
         set {
+            debugLogger?("[FOCUS] hasFocus SET: \(newValue)")
             _hasFocus = newValue
             caretView.focused = newValue
         }
@@ -472,19 +563,26 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     // NSTextInputClient protocol implementation
     //
     public override func becomeFirstResponder() -> Bool {
+        debugLogger?("[FOCUS] becomeFirstResponder called")
         let response = super.becomeFirstResponder()
+        debugLogger?("[FOCUS] becomeFirstResponder: super returned \(response)")
         if response {
             hasFocus = true
             caretView.updateCursorStyle()
         }
         return response
     }
-    
+
     public override func resignFirstResponder() -> Bool {
+        debugLogger?("[FOCUS] resignFirstResponder called")
         let response = super.resignFirstResponder()
+        debugLogger?("[FOCUS] resignFirstResponder: super returned \(response)")
         if response {
             caretView.disableAnimations()
-            hasFocus = false
+            // Only update caret visual state, keep _hasFocus = true
+            // so becomeKeyObserver can restore first responder
+            caretView.focused = false
+            debugLogger?("[FOCUS] resignFirstResponder: caretView.focused=false, keeping _hasFocus=\(_hasFocus)")
         }
         return response
     }

@@ -24,10 +24,22 @@ struct TerminalView: NSViewRepresentable {
             terminalView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor)
         ])
 
-        // Make terminal first responder
-        DispatchQueue.main.async {
-            terminalView.window?.makeFirstResponder(terminalView)
+        // Make terminal first responder with retry logic
+        // Window may not be ready immediately, especially for the first terminal
+        func attemptFocus(retries: Int = 10) {
+            if let window = terminalView.window {
+                Logger.shared.debug("[FOCUS] makeNSView: window ready, calling makeFirstResponder")
+                window.makeFirstResponder(terminalView)
+            } else if retries > 0 {
+                Logger.shared.debug("[FOCUS] makeNSView: window nil, retrying... (\(retries) left)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    attemptFocus(retries: retries - 1)
+                }
+            } else {
+                Logger.shared.debug("[FOCUS] makeNSView: failed to get window after all retries")
+            }
         }
+        attemptFocus()
 
         return containerView
     }
@@ -52,11 +64,19 @@ struct TerminalView: NSViewRepresentable {
 
         // Ensure terminal is first responder when view updates
         if let terminalView = nsView.terminalView {
-            DispatchQueue.main.async {
-                if nsView.window?.firstResponder != terminalView {
-                    nsView.window?.makeFirstResponder(terminalView)
+            func attemptFocus(retries: Int = 5) {
+                if let window = nsView.window {
+                    if window.firstResponder != terminalView {
+                        Logger.shared.debug("[FOCUS] updateNSView: calling makeFirstResponder")
+                        window.makeFirstResponder(terminalView)
+                    }
+                } else if retries > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        attemptFocus(retries: retries - 1)
+                    }
                 }
             }
+            attemptFocus()
         }
     }
 
@@ -74,17 +94,27 @@ class TerminalContainerNSView: NSView {
     }
 
     override func becomeFirstResponder() -> Bool {
-        // Forward first responder to terminal view
+        Logger.shared.debug("[FOCUS] Container.becomeFirstResponder called")
+        // Forward first responder to terminal view with retry logic
         if let terminalView = terminalView {
-            DispatchQueue.main.async {
-                self.window?.makeFirstResponder(terminalView)
+            func attemptFocus(retries: Int = 5) {
+                if let window = self.window {
+                    Logger.shared.debug("[FOCUS] Container.becomeFirstResponder: forwarding to terminalView")
+                    window.makeFirstResponder(terminalView)
+                } else if retries > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        attemptFocus(retries: retries - 1)
+                    }
+                }
             }
+            attemptFocus()
         }
         return true
     }
 
     override func mouseDown(with event: NSEvent) {
         super.mouseDown(with: event)
+        Logger.shared.debug("[FOCUS] Container.mouseDown: setting terminalView as first responder")
         // Make terminal first responder when clicked
         if let terminalView = terminalView {
             window?.makeFirstResponder(terminalView)

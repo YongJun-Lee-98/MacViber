@@ -34,6 +34,12 @@ struct TerminalPaneView: View {
                         .id(sessionId)
                         .contentShape(Rectangle())
                         .onTapGesture { onFocus() }
+                        .onChange(of: isFocused) { oldValue, newValue in
+                            if newValue && !oldValue {
+                                // 포커스 획득 시 키보드 포커스도 설정
+                                controller.requestFocus()
+                            }
+                        }
                 } else {
                     Text("Terminal not found")
                         .foregroundColor(.secondary)

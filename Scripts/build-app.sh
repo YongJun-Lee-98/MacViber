@@ -2,6 +2,13 @@
 
 # MacViber App Bundle Builder
 # Creates a proper macOS .app bundle
+#
+# Usage:
+#   ./build-app.sh              # Build with current version
+#   ./build-app.sh patch        # Bump patch version (1.2.3 -> 1.2.4) - for bug fixes
+#   ./build-app.sh minor        # Bump minor version (1.2.3 -> 1.3.0) - for new features
+#   ./build-app.sh major        # Bump major version (1.2.3 -> 2.0.0) - for major updates
+#   ./build-app.sh 1.5.0        # Set specific version
 
 set -e
 
@@ -14,10 +21,57 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 INFO_PLIST="$PROJECT_DIR/MacViber/Resources/Info.plist"
 
-# Read version from Info.plist (source of truth)
-VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
+# Read current version from Info.plist
+CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
 BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO_PLIST")
-echo "📋 Version: $VERSION ($BUILD_NUMBER) from Info.plist"
+
+# Parse version components
+IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+# Handle version bump argument
+case "$1" in
+    major)
+        # Major update (a.b.c -> a+1.0.0)
+        MAJOR=$((MAJOR + 1))
+        MINOR=0
+        PATCH=0
+        echo "🔼 Bumping MAJOR version (large-scale update)"
+        ;;
+    minor)
+        # Minor update (a.b.c -> a.b+1.0)
+        MINOR=$((MINOR + 1))
+        PATCH=0
+        echo "🔼 Bumping MINOR version (feature update)"
+        ;;
+    patch)
+        # Patch update (a.b.c -> a.b.c+1)
+        PATCH=$((PATCH + 1))
+        echo "🔼 Bumping PATCH version (bug fix)"
+        ;;
+    "")
+        # No argument, use current version
+        echo "📋 Using current version"
+        ;;
+    *)
+        # Specific version provided (e.g., 1.5.0)
+        if [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$1"
+            echo "📋 Setting specific version: $1"
+        else
+            echo "❌ Invalid version format. Use: major, minor, patch, or X.Y.Z"
+            exit 1
+        fi
+        ;;
+esac
+
+VERSION="${MAJOR}.${MINOR}.${PATCH}"
+BUILD_NUMBER=$((BUILD_NUMBER + 1))
+
+# Update Info.plist with new version
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$INFO_PLIST"
+
+echo "📋 Version: $VERSION (Build $BUILD_NUMBER)"
 
 # Build paths
 BUILD_DIR="$PROJECT_DIR/.build/release"

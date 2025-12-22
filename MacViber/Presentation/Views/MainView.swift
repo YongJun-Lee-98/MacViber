@@ -39,8 +39,11 @@ struct MainView: View {
         }
         .onAppear {
             // Create initial terminal if none exists
+            // Delay slightly to ensure window is fully set up (fixes focus issues)
             if sessionManager.sessions.isEmpty {
-                viewModel.addNewTerminalAtHome()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    viewModel.addNewTerminalAtHome()
+                }
             }
         }
         .sheet(isPresented: $viewModel.showKeyboardShortcuts) {
