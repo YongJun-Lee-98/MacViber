@@ -394,6 +394,13 @@ class CustomTerminalView: LocalProcessTerminalView {
         needsDisplay = true
     }
 
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        // Clear marked text overlay before inserting
+        markedTextString = ""
+        needsDisplay = true
+        super.insertText(string, replacementRange: replacementRange)
+    }
+
     override func hasMarkedText() -> Bool {
         return !markedTextString.isEmpty
     }
@@ -403,6 +410,103 @@ class CustomTerminalView: LocalProcessTerminalView {
             return NSRange(location: NSNotFound, length: 0)
         }
         return NSRange(location: 0, length: markedTextString.count)
+    }
+
+    // MARK: - Korean Composition Display
+
+    private var fontDescent: CGFloat {
+        return CTFontGetDescent(self.font)
+    }
+
+    /// Returns column width for a unicode scalar (Korean/CJK = 2, others = 1)
+    private func columnWidth(for scalar: UnicodeScalar) -> Int {
+        let value = scalar.value
+        // Hangul Jamo
+        if value >= 0x1100 && value <= 0x115F { return 2 }
+        // Hangul Compatibility Jamo
+        if value >= 0x3130 && value <= 0x318F { return 2 }
+        // Hangul Syllables
+        if value >= 0xAC00 && value <= 0xD7A3 { return 2 }
+        // CJK ranges
+        if value >= 0x2E80 && value <= 0xA4CF { return 2 }
+        if value >= 0xF900 && value <= 0xFAFF { return 2 }
+        if value >= 0xFE30 && value <= 0xFE4F { return 2 }
+        if value >= 0xFF00 && value <= 0xFF60 { return 2 }
+        if value >= 0x20000 && value <= 0x2FFFF { return 2 }
+        return 1
+    }
+
+    private func getCursorScreenPosition() -> CGPoint {
+        let terminal = getTerminal()
+        let buffer = terminal.buffer
+
+        let cellWidth = bounds.width / CGFloat(terminal.cols)
+        let cellHeight = bounds.height / CGFloat(terminal.rows)
+
+        // macOS coordinate system: origin at bottom-left
+        let cursorX = CGFloat(buffer.x) * cellWidth
+        let cursorY = bounds.height - (CGFloat(buffer.y + 1) * cellHeight)
+
+        return CGPoint(x: cursorX, y: cursorY)
+    }
+
+    private func drawMarkedTextOverlay(in context: CGContext) {
+        guard !markedTextString.isEmpty else { return }
+
+        let terminal = getTerminal()
+        let cellWidth = bounds.width / CGFloat(terminal.cols)
+        let cellHeight = bounds.height / CGFloat(terminal.rows)
+
+        let cursorPos = getCursorScreenPosition()
+
+        // Calculate total width for Korean characters (2 columns each)
+        var totalWidth: CGFloat = 0
+        for scalar in markedTextString.unicodeScalars {
+            let charWidth = columnWidth(for: scalar)
+            totalWidth += CGFloat(charWidth) * cellWidth
+        }
+
+        // Draw background to cover cursor and existing content
+        let bgRect = CGRect(x: cursorPos.x, y: cursorPos.y, width: totalWidth, height: cellHeight)
+        context.saveGState()
+        context.setFillColor(nativeBackgroundColor.cgColor)
+        context.fill(bgRect)
+        context.restoreGState()
+
+        // Create attributed string with underline
+        let termFont = self.font
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: termFont,
+            .foregroundColor: nativeForegroundColor,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .underlineColor: nativeForegroundColor
+        ]
+
+        let attrString = NSAttributedString(string: markedTextString, attributes: attributes)
+        let ctLine = CTLineCreateWithAttributedString(attrString)
+
+        // Draw marked text at cursor position
+        context.saveGState()
+        context.textPosition = CGPoint(x: cursorPos.x, y: cursorPos.y + fontDescent)
+        CTLineDraw(ctLine, context)
+        context.restoreGState()
+
+        // Move cursor (CaretView) to the right side of marked text
+        for subview in subviews {
+            if String(describing: type(of: subview)).contains("CaretView") {
+                var newFrame = subview.frame
+                newFrame.origin.x = cursorPos.x + totalWidth
+                subview.frame = newFrame
+                break
+            }
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        drawMarkedTextOverlay(in: context)
     }
 }
 
