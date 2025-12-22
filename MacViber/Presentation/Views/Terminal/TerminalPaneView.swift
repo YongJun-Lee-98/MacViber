@@ -48,7 +48,7 @@ struct TerminalPaneView: View {
             }
             .overlay(
                 Rectangle()
-                    .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+                    .stroke(isFocused ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
             )
             .onHover { isHovered = $0 }
         }
@@ -83,7 +83,7 @@ struct TerminalPaneView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(isFocused ? Color.accentColor.opacity(0.1) : Color(nsColor: .windowBackgroundColor))
+        .background(isFocused ? Color.blue.opacity(0.08) : Color(nsColor: .windowBackgroundColor))
     }
 
     private func paneControls(geometry: GeometryProxy) -> some View {

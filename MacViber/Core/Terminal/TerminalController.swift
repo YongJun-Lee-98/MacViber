@@ -63,19 +63,10 @@ class TerminalController: ObservableObject {
     func createTerminalView(workingDirectory: URL) -> CustomTerminalView {
         // Reuse existing terminal view if already created
         if let existingView = terminalView {
-            // Ensure debugLogger is set on existing view too
-            existingView.debugLogger = { message in
-                Logger.shared.debug(message)
-            }
             return existingView
         }
 
         let termView = CustomTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
-
-        // Enable debug logging for focus issues
-        termView.debugLogger = { message in
-            Logger.shared.debug(message)
-        }
 
         // Configure terminal appearance
         termView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -152,7 +143,6 @@ class TerminalController: ObservableObject {
     func requestFocus() {
         guard let termView = terminalView else { return }
         DispatchQueue.main.async {
-            Logger.shared.debug("[FOCUS] requestFocus: calling makeFirstResponder")
             termView.window?.makeFirstResponder(termView)
         }
     }
