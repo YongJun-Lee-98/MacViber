@@ -187,7 +187,7 @@ struct TerminalContainerView: View {
 
             // Terminal view
             if let controller = viewModel.controller(for: session.id) {
-                TerminalView(controller: controller, workingDirectory: session.workingDirectory)
+                TerminalView(controller: controller, workingDirectory: session.workingDirectory, isFocused: true)
             } else {
                 Text("Failed to initialize terminal")
                     .foregroundColor(.secondary)

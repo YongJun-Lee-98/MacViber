@@ -141,9 +141,15 @@ class TerminalController: ObservableObject {
     }
 
     func requestFocus() {
-        guard let termView = terminalView else { return }
+        Logger.shared.debug("[FOCUS] TerminalController.requestFocus - sessionId: \(sessionId)")
+        guard let termView = terminalView else {
+            Logger.shared.debug("[FOCUS] → terminalView is nil, returning")
+            return
+        }
         DispatchQueue.main.async {
+            Logger.shared.debug("[FOCUS] → making termView first responder, current: \(String(describing: termView.window?.firstResponder))")
             termView.window?.makeFirstResponder(termView)
+            Logger.shared.debug("[FOCUS] → after makeFirstResponder: \(String(describing: termView.window?.firstResponder))")
         }
     }
 

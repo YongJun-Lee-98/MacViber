@@ -72,6 +72,9 @@ class MainViewModel: ObservableObject {
         // Setup notification observers
         setupNotificationObservers()
 
+        // Setup window focus observer for restoring focus after system dialogs
+        setupWindowObserver()
+
         // Subscribe to selectedSessionId changes from SessionManager
         sessionManager.$selectedSessionId
             .receive(on: DispatchQueue.main)
@@ -113,6 +116,19 @@ class MainViewModel: ObservableObject {
             .sink { [weak self] state in
                 self?.focusedPaneId = state.focusedPaneId
                 self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        // Sync focusedPaneId changes back to SessionManager (from user clicks via binding)
+        $focusedPaneId
+            .dropFirst()  // Skip initial value
+            .removeDuplicates()
+            .sink { [weak self] paneId in
+                guard let self = self else { return }
+                // Only sync if the value is different from SessionManager's (prevent circular updates)
+                if self.sessionManager.splitViewState.focusedPaneId != paneId {
+                    self.sessionManager.setFocusedPane(paneId)
+                }
             }
             .store(in: &cancellables)
     }
@@ -180,6 +196,29 @@ class MainViewModel: ObservableObject {
                 self?.toggleRightSidebar()
             }
             .store(in: &cancellables)
+    }
+
+    private func setupWindowObserver() {
+        // Restore focus to active pane when window becomes key (e.g., after system dialogs)
+        NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.restoreFocusToActivePane()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func restoreFocusToActivePane() {
+        // Only restore focus in split view mode
+        guard sessionManager.splitViewState.isActive,
+              let focusedPaneId = sessionManager.splitViewState.focusedPaneId,
+              let sessionId = sessionManager.splitViewState.rootNode?.sessionId(for: focusedPaneId),
+              let controller = sessionManager.controller(for: sessionId) else {
+            return
+        }
+
+        Logger.shared.debug("[FOCUS] Window became key - restoring focus to pane: \(focusedPaneId), session: \(sessionId)")
+        controller.requestFocus()
     }
 
     func addNewTerminal() {

@@ -30,13 +30,15 @@ struct TerminalPaneView: View {
 
                 // Terminal content
                 if let session = session, let controller = controller {
-                    TerminalView(controller: controller, workingDirectory: session.workingDirectory)
+                    TerminalView(controller: controller, workingDirectory: session.workingDirectory, isFocused: isFocused)
                         .id(sessionId)
                         .contentShape(Rectangle())
                         .onTapGesture { onFocus() }
                         .onChange(of: isFocused) { oldValue, newValue in
+                            Logger.shared.debug("[FOCUS] TerminalPaneView.onChange - paneId: \(paneId), old: \(oldValue), new: \(newValue)")
                             if newValue && !oldValue {
                                 // 포커스 획득 시 키보드 포커스도 설정
+                                Logger.shared.debug("[FOCUS] → calling controller.requestFocus()")
                                 controller.requestFocus()
                             }
                         }
