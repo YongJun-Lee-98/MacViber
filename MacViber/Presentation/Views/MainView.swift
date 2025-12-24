@@ -4,7 +4,7 @@ struct MainView: View {
     @EnvironmentObject var sessionManager: SessionManager
     @StateObject private var viewModel = MainViewModel()
     @StateObject private var terminalListViewModel = TerminalListViewModel()
-    @State private var sidebarWidth: CGFloat = 200
+    @State private var sidebarWidth: CGFloat = 350
 
     var body: some View {
         NavigationSplitView(columnVisibility: $viewModel.columnVisibility) {
