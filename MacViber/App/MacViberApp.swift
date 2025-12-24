@@ -112,23 +112,37 @@ struct MacViberApp: App {
                 .keyboardShortcut("[", modifiers: [.command, .option])
             }
 
-            // Explicitly route Copy/Paste through SessionManager
-            // (responder chain doesn't reach CustomTerminalView)
+            // Context-aware Copy/Paste: use system default for text fields, terminal methods otherwise
             CommandGroup(replacing: .pasteboard) {
                 Button("Copy") {
-                    SessionManager.shared.copyFromActiveTerminal()
+                    if let responder = NSApp.keyWindow?.firstResponder,
+                       responder is NSTextView {
+                        NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil)
+                    } else {
+                        SessionManager.shared.copyFromActiveTerminal()
+                    }
                 }
                 .keyboardShortcut("c", modifiers: .command)
 
                 Button("Paste") {
-                    SessionManager.shared.pasteToActiveTerminal()
+                    if let responder = NSApp.keyWindow?.firstResponder,
+                       responder is NSTextView {
+                        NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil)
+                    } else {
+                        SessionManager.shared.pasteToActiveTerminal()
+                    }
                 }
                 .keyboardShortcut("v", modifiers: .command)
 
                 Divider()
 
                 Button("Select All") {
-                    SessionManager.shared.selectAllInActiveTerminal()
+                    if let responder = NSApp.keyWindow?.firstResponder,
+                       responder is NSTextView {
+                        NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+                    } else {
+                        SessionManager.shared.selectAllInActiveTerminal()
+                    }
                 }
                 .keyboardShortcut("a", modifiers: .command)
             }
