@@ -75,6 +75,10 @@ final class FavoritesManager: ObservableObject {
         favorites.contains { $0.path == url.path }
     }
 
+    func favorite(for url: URL) -> FavoriteFolder? {
+        favorites.first { $0.path == url.path }
+    }
+
     // MARK: - Persistence
 
     private func save() {

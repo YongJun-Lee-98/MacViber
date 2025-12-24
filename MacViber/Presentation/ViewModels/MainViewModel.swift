@@ -304,6 +304,11 @@ class MainViewModel: ObservableObject {
             return
         }
 
+        // Set alias if navigating to a favorite folder
+        if let favorite = FavoritesManager.shared.favorite(for: url) {
+            sessionManager.setSessionAlias(sessionId, alias: favorite.name)
+        }
+
         // Send cd command to the current terminal
         controller.sendInput("cd \"\(url.path)\" && clear\n")
     }
