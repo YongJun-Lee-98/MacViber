@@ -56,7 +56,8 @@ struct SplitContainerView: View {
     @State private var ratio: CGFloat
     @State private var isDragging = false
 
-    private let dividerWidth: CGFloat = 4
+    private let dividerWidth: CGFloat = 16
+    private let visualDividerWidth: CGFloat = 4
     private let minRatio: CGFloat = 0.15
     private let maxRatio: CGFloat = 0.85
 
@@ -104,10 +105,15 @@ struct SplitContainerView: View {
             )
             .frame(width: firstWidth)
 
-            // Draggable divider
+            // Draggable divider with expanded hit area
             Rectangle()
-                .fill(isDragging ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.3))
+                .fill(Color.clear)
                 .frame(width: dividerWidth)
+                .overlay(
+                    Rectangle()
+                        .fill(isDragging ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.3))
+                        .frame(width: visualDividerWidth)
+                )
                 .contentShape(Rectangle())
                 .onHover { hovering in
                     if hovering {
@@ -154,10 +160,15 @@ struct SplitContainerView: View {
             )
             .frame(height: firstHeight)
 
-            // Draggable divider
+            // Draggable divider with expanded hit area
             Rectangle()
-                .fill(isDragging ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.3))
+                .fill(Color.clear)
                 .frame(height: dividerWidth)
+                .overlay(
+                    Rectangle()
+                        .fill(isDragging ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.3))
+                        .frame(height: visualDividerWidth)
+                )
                 .contentShape(Rectangle())
                 .onHover { hovering in
                     if hovering {
