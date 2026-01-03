@@ -108,12 +108,12 @@ struct TerminalPaneView: View {
             .buttonStyle(.plain)
             .help("Split Vertical (Cmd+Shift+D)")
 
-            // Close pane button
+            // Minimize pane button
             Button(action: onClose) {
-                Image(systemName: "xmark")
+                Image(systemName: "minus")
             }
             .buttonStyle(.plain)
-            .help("Close Pane")
+            .help("Minimize Pane")
         }
         .font(.caption)
         .foregroundColor(.secondary)

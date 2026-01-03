@@ -82,6 +82,11 @@ class SessionManager: ObservableObject {
         sessions.removeAll { $0.id == sessionId }
         activeNotifications.removeAll { $0.sessionId == sessionId }
 
+        // Split view에서 해당 세션의 pane 제거
+        if let paneId = findPaneIdForSession(sessionId) {
+            removePaneFromSplit(paneId)
+        }
+
         // Select another session if current was closed
         if selectedSessionId == sessionId {
             selectedSessionId = sessions.first?.id
@@ -307,6 +312,24 @@ class SessionManager: ObservableObject {
     }
 
     // MARK: - Split View Management
+
+    /// Split view에 표시되지 않은 세션 중 가장 최근에 사용된 세션 반환
+    func getUnusedSession() -> TerminalSession? {
+        // 현재 split에 표시된 sessionId들 수집
+        let usedSessionIds: Set<UUID>
+        if let root = splitViewState.rootNode {
+            usedSessionIds = Set(root.allSessionIds)
+        } else if let selectedId = selectedSessionId {
+            usedSessionIds = [selectedId]
+        } else {
+            usedSessionIds = []
+        }
+
+        // 미사용 세션 중 lastActivity 기준 최신 것 선택
+        return sessions
+            .filter { !usedSessionIds.contains($0.id) }
+            .max(by: { $0.lastActivity < $1.lastActivity })
+    }
 
     func setSplitViewRoot(_ node: SplitNode?) {
         var newState = splitViewState

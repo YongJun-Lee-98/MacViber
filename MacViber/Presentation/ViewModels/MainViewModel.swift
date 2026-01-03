@@ -401,16 +401,24 @@ class MainViewModel: ObservableObject {
     func splitPane(_ paneId: UUID, direction: SplitDirection, currentSize: CGSize) {
         guard canSplit else { return }
 
-        // Create new terminal for the split
-        let homeURL = FileManager.default.homeDirectoryForCurrentUser
-        let newSession = sessionManager.createSession(
-            name: "Terminal",
-            workingDirectory: homeURL
-        )
+        // 먼저 미사용 세션이 있는지 확인
+        let sessionIdToUse: UUID
+        if let unusedSession = sessionManager.getUnusedSession() {
+            sessionIdToUse = unusedSession.id
+        } else {
+            // 미사용 세션이 없으면 새 터미널 생성
+            let homeURL = FileManager.default.homeDirectoryForCurrentUser
+            let newSession = sessionManager.createSession(
+                name: "Terminal",
+                workingDirectory: homeURL
+            )
+            sessionIdToUse = newSession.id
+        }
+
         sessionManager.splitPane(
             paneId,
             direction: direction,
-            newSessionId: newSession.id,
+            newSessionId: sessionIdToUse,
             currentSize: currentSize
         )
     }
