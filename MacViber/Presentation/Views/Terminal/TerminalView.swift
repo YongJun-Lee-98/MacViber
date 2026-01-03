@@ -14,6 +14,15 @@ struct TerminalView: NSViewRepresentable {
         containerView.layer?.backgroundColor = themeManager.effectiveBackgroundColor.cgColor
 
         let terminalView = controller.createTerminalView(workingDirectory: workingDirectory)
+
+        // Remove from previous superview if being reused (prevents constraint conflicts)
+        if terminalView.superview != nil {
+            terminalView.removeFromSuperview()
+        }
+
+        // Remove any existing constraints before adding new ones
+        terminalView.removeConstraints(terminalView.constraints)
+
         terminalView.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(terminalView)
         containerView.terminalView = terminalView
