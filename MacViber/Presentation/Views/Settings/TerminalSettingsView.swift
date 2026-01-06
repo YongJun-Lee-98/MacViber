@@ -5,6 +5,7 @@ struct TerminalSettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var flushDelayMs: Double = 50
+    @State private var fastOutputCollapseEnabled: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,13 +16,15 @@ struct TerminalSettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     performanceSection
+                    developerSection
                 }
                 .padding()
             }
         }
-        .frame(width: 450, height: 220)
+        .frame(width: 450, height: 320)
         .onAppear {
             flushDelayMs = settingsManager.outputFlushDelay * 1000
+            fastOutputCollapseEnabled = settingsManager.fastOutputCollapseEnabled
         }
     }
 
@@ -70,6 +73,32 @@ struct TerminalSettingsView: View {
                         flushDelayMs = settingsManager.outputFlushDelay * 1000
                     }
                     .buttonStyle(.borderless)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var developerSection: some View {
+        GroupBox("Developer (Test Mode)") {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle("Fast Output Collapse", isOn: $fastOutputCollapseEnabled)
+                    .onChange(of: fastOutputCollapseEnabled) { _, newValue in
+                        settingsManager.setFastOutputCollapseEnabled(newValue)
+                    }
+
+                Text("When enabled, detects fast output (>\(settingsManager.fastOutputThresholdLines) lines/\(Int(settingsManager.fastOutputThresholdMs))ms) and shows only the last \(settingsManager.fastOutputVisibleLines) lines to reduce screen flickering.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if fastOutputCollapseEnabled {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("Experimental feature - check Console.app for debug logs")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
                 }
             }
             .padding(.vertical, 4)

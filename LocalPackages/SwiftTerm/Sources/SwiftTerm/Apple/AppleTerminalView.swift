@@ -1091,6 +1091,7 @@ extension TerminalView {
     public func scroll (toPosition: Double)
     {
         userScrolling = true
+        terminal.userScrolling = true  // Sync with Terminal's flag for linefeed logic
         let oldPosition = terminal.buffer.yDisp
         
         let maxScrollback = terminal.buffer.lines.count - terminal.rows
@@ -1108,7 +1109,11 @@ extension TerminalView {
         if newScrollPosition != oldPosition {
             scrollTo(row: newScrollPosition)
         }
-        userScrolling = false
+
+        // Only clear userScrolling if scrolled to bottom, otherwise keep scroll position
+        let isAtBottom = newScrollPosition >= maxScrollback - 1
+        userScrolling = !isAtBottom
+        terminal.userScrolling = !isAtBottom
     }
     
     func scrollTo (row: Int, notifyAccessibility: Bool = true)

@@ -4808,9 +4808,12 @@ open class Terminal {
             buffer.lines [bottomRow] = BufferLine (from: newLine)
         }
 
-        // Move the viewport to the bottom of the buffer unless the user is
-        // scrolling.
-        if !userScrolling {
+        // Move the viewport to the bottom of the buffer only if:
+        // 1. User is not scrolling, AND
+        // 2. User is already at (or near) the bottom
+        // This prevents scroll jumping when user has scrolled up to read content
+        let isAtBottom = buffer.yDisp >= buffer.yBase - 1
+        if !userScrolling && isAtBottom {
             buffer.yDisp = buffer.yBase
         }
 

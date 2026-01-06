@@ -455,6 +455,10 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
     
     open func linefeed(source: Terminal) {
+        // Preserve selection during mouse drag to prevent selection loss during fast output
+        if didSelectionDrag { return }
+        // Also protect selection for a short period after drag completes (allows copy operation)
+        if let until = selectionProtectedUntil, Date() < until { return }
         selection.selectNone()
     }
     
@@ -1066,6 +1070,8 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
     
     var didSelectionDrag: Bool = false
+    /// Selection protection timer: prevents linefeed from clearing selection for a short period after drag completes
+    var selectionProtectedUntil: Date?
     
     public override func mouseUp(with event: NSEvent) {
         if event.modifierFlags.contains(.command){
@@ -1084,7 +1090,11 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         // let hit = calculateMouseHit(with: event)
         //print ("Up at col=\(hit.col) row=\(hit.row) count=\(event.clickCount) selection.active=\(selection.active) didSelectionDrag=\(didSelectionDrag) ")
         #endif
-        
+
+        // Set selection protection for 500ms after drag completes to allow copy operation
+        if didSelectionDrag {
+            selectionProtectedUntil = Date().addingTimeInterval(0.5)
+        }
         didSelectionDrag = false
     }
     

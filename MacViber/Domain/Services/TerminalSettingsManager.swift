@@ -29,6 +29,29 @@ final class TerminalSettingsManager: ObservableObject {
         save()
     }
 
+    // MARK: - Fast Output Collapse Settings
+
+    var fastOutputCollapseEnabled: Bool {
+        settings.fastOutputCollapseEnabled
+    }
+
+    var fastOutputThresholdLines: Int {
+        settings.fastOutputThresholdLines
+    }
+
+    var fastOutputThresholdMs: Double {
+        settings.fastOutputThresholdMs
+    }
+
+    var fastOutputVisibleLines: Int {
+        settings.fastOutputVisibleLines
+    }
+
+    func setFastOutputCollapseEnabled(_ value: Bool) {
+        settings.fastOutputCollapseEnabled = value
+        save()
+    }
+
     private func save() {
         do {
             let data = try JSONEncoder().encode(settings)

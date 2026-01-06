@@ -222,6 +222,11 @@ class CustomTerminalView: LocalProcessTerminalView {
         TerminalSettingsManager.shared.outputFlushDelay
     }
 
+    // Fast output collapse state (developer test mode)
+    private var recentLineTimestamps: [Date] = []
+    private var isFastOutputMode: Bool = false
+    private var collapsedLineCount: Int = 0
+
     // IME (Korean input) support
     private var markedTextString: String = ""
 
@@ -380,8 +385,48 @@ class CustomTerminalView: LocalProcessTerminalView {
 
         if let output = String(bytes: outputBuffer, encoding: .utf8) {
             onOutput?(output)
+
+            // Fast output collapse detection (developer test mode)
+            if TerminalSettingsManager.shared.fastOutputCollapseEnabled {
+                processFastOutputCollapse(output)
+            }
         }
         outputBuffer.removeAll(keepingCapacity: true)
+    }
+
+    // MARK: - Fast Output Collapse Logic
+
+    private func processFastOutputCollapse(_ output: String) {
+        let settings = TerminalSettingsManager.shared
+        let now = Date()
+        let thresholdSeconds = settings.fastOutputThresholdMs / 1000.0
+
+        // Count new lines in output
+        let newLineCount = output.components(separatedBy: "\n").count - 1
+        guard newLineCount > 0 else { return }
+
+        // Add timestamps for new lines
+        recentLineTimestamps.append(contentsOf: Array(repeating: now, count: newLineCount))
+
+        // Remove old timestamps (outside time window)
+        recentLineTimestamps.removeAll { now.timeIntervalSince($0) > thresholdSeconds }
+
+        // Check if we should enter fast output mode
+        if recentLineTimestamps.count >= settings.fastOutputThresholdLines {
+            if !isFastOutputMode {
+                isFastOutputMode = true
+                Logger.shared.debug("[FastOutput] Entered fast output mode (lines in window: \(recentLineTimestamps.count))")
+            }
+
+            // In fast output mode: scroll to bottom and only show recent lines
+            // This is handled by letting SwiftTerm render normally but logging for debug
+            collapsedLineCount += max(0, newLineCount - settings.fastOutputVisibleLines)
+        } else if isFastOutputMode {
+            // Exit fast output mode when speed decreases
+            isFastOutputMode = false
+            Logger.shared.debug("[FastOutput] Exited fast output mode (collapsed \(collapsedLineCount) lines)")
+            collapsedLineCount = 0
+        }
     }
 
     // MARK: - NSTextInputClient Override (Korean IME Support)

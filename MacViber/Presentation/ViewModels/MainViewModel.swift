@@ -446,9 +446,26 @@ class MainViewModel: ObservableObject {
         // If no panes left, exit split view
         if splitViewState.paneCount == 0 {
             exitSplitView()
+            // Restore focus to remaining terminal after exiting split view
+            if let sessionId = selectedSessionId,
+               let controller = sessionManager.controller(for: sessionId) {
+                DispatchQueue.main.async {
+                    controller.requestFocus()
+                }
+            }
         } else if splitViewState.paneCount == 1 {
             // Optionally exit split view when only one pane remains
             exitSplitView()
+            // Restore focus to remaining terminal after exiting split view
+            if let sessionId = selectedSessionId,
+               let controller = sessionManager.controller(for: sessionId) {
+                DispatchQueue.main.async {
+                    controller.requestFocus()
+                }
+            }
+        } else {
+            // Still in split view, restore focus to active pane
+            restoreFocusToActivePane()
         }
     }
 
