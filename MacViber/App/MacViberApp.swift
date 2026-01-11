@@ -74,6 +74,11 @@ struct MacViberApp: App {
                     NotificationCenter.default.post(name: .newTerminalRequested, object: nil)
                 }
                 .keyboardShortcut("t", modifiers: .command)
+
+                Button("New Instance") {
+                    NotificationCenter.default.post(name: .newInstanceRequested, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: [.command, .option])
             }
 
             CommandGroup(after: .newItem) {
@@ -252,6 +257,7 @@ extension Notification.Name {
     static let hideNotificationGrid = Notification.Name("hideNotificationGrid")
     static let toggleRightSidebar = Notification.Name("toggleRightSidebar")
     static let checkForUpdatesRequested = Notification.Name("checkForUpdatesRequested")
+    static let newInstanceRequested = Notification.Name("newInstanceRequested")
 }
 
 // MARK: - Keyboard Shortcuts View
@@ -283,6 +289,7 @@ struct KeyboardShortcutsView: View {
                     // Terminal Management
                     ShortcutSection(title: "Terminal", shortcuts: [
                         ShortcutItem(keys: "⌘ T", description: "New Terminal"),
+                        ShortcutItem(keys: "⌥⌘ N", description: "New Instance"),
                         ShortcutItem(keys: "⌘ W", description: "Close Terminal"),
                     ])
 
@@ -354,6 +361,29 @@ struct ShortcutItem: Identifiable {
 // MARK: - App Delegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(openNewInstance),
+            name: .newInstanceRequested,
+            object: nil
+        )
+    }
+
+    @objc private func openNewInstance() {
+        let bundleURL = Bundle.main.bundleURL
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+
+        NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { _, error in
+            if let error = error {
+                Logger.shared.error("Failed to open new instance: \(error.localizedDescription)")
+            } else {
+                Logger.shared.info("Successfully launched new MacViber instance")
+            }
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // 모든 터미널 세션 종료
         Logger.shared.info("Application terminating - closing all terminal sessions")
