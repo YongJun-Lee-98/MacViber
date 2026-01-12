@@ -198,7 +198,9 @@ class UpdateChecker: ObservableObject {
 
         do {
             // ~/Downloads/ 폴더에 저장
-            let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+            guard let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else {
+                throw UpdateError.fileOperationFailed(NSError(domain: "UpdateChecker", code: -1, userInfo: [NSLocalizedDescriptionKey: "Downloads directory not found"]))
+            }
             let fileName = "MacViber-v\(latestVersion ?? "latest").dmg"
             let destinationURL = downloadsURL.appendingPathComponent(fileName)
 

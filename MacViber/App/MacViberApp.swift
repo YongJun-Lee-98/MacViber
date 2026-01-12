@@ -368,6 +368,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .newInstanceRequested,
             object: nil
         )
+
+        // 홈 디렉토리 접근 권한 확인 및 요청
+        checkAndRequestHomeDirectoryAccess()
+    }
+
+    private func checkAndRequestHomeDirectoryAccess() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            BookmarkManager.shared.requestFullDiskAccessIfNeeded()
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     @objc private func openNewInstance() {

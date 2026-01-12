@@ -4,6 +4,7 @@ struct RightSidebarView: View {
     @StateObject private var viewModel = NoteViewModel()
     @State private var showSavedMessage = false
     @State private var noteListHeight: CGFloat = 200
+    @State private var saveMessageTask: DispatchWorkItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +31,9 @@ struct RightSidebarView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onDisappear {
+            saveMessageTask?.cancel()
+        }
     }
 
     private var noteEditorSection: some View {
@@ -96,11 +100,14 @@ struct RightSidebarView: View {
                 withAnimation {
                     showSavedMessage = true
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                saveMessageTask?.cancel()
+                let task = DispatchWorkItem {
                     withAnimation {
                         showSavedMessage = false
                     }
                 }
+                saveMessageTask = task
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: task)
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "square.and.arrow.down")

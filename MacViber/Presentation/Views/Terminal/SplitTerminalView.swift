@@ -123,11 +123,16 @@ struct SplitContainerView: View {
                     }
                 }
                 .gesture(
-                    DragGesture()
+                    DragGesture(coordinateSpace: .named("horizontalSplit"))
                         .onChanged { value in
                             isDragging = true
-                            let delta = value.translation.width
-                            let newRatio = (firstWidth + delta) / availableWidth
+                            let totalWidth = geometry.size.width
+                            let availableWidth = totalWidth - dividerWidth
+                            guard availableWidth > 0 else { return }
+
+                            // divider 중심 위치에서 firstWidth 영역 계산
+                            let firstPaneEnd = value.location.x - dividerWidth / 2
+                            let newRatio = firstPaneEnd / availableWidth
                             ratio = min(max(newRatio, minRatio), maxRatio)
                         }
                         .onEnded { _ in
@@ -143,6 +148,7 @@ struct SplitContainerView: View {
             )
             .frame(width: secondWidth)
         }
+        .coordinateSpace(name: "horizontalSplit")
     }
 
     @ViewBuilder
@@ -178,11 +184,16 @@ struct SplitContainerView: View {
                     }
                 }
                 .gesture(
-                    DragGesture()
+                    DragGesture(coordinateSpace: .named("verticalSplit"))
                         .onChanged { value in
                             isDragging = true
-                            let delta = value.translation.height
-                            let newRatio = (firstHeight + delta) / availableHeight
+                            let totalHeight = geometry.size.height
+                            let availableHeight = totalHeight - dividerWidth
+                            guard availableHeight > 0 else { return }
+
+                            // divider 중심 위치에서 firstHeight 영역 계산
+                            let firstPaneEnd = value.location.y - dividerWidth / 2
+                            let newRatio = firstPaneEnd / availableHeight
                             ratio = min(max(newRatio, minRatio), maxRatio)
                         }
                         .onEnded { _ in
@@ -198,6 +209,7 @@ struct SplitContainerView: View {
             )
             .frame(height: secondHeight)
         }
+        .coordinateSpace(name: "verticalSplit")
     }
 }
 

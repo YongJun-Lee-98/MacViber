@@ -6,6 +6,7 @@ class NoteManager: ObservableObject {
 
     @Published private(set) var notes: [Note] = []
     @Published var selectedNoteId: UUID?
+    @Published var lastSaveError: Error?
 
     private let notesDirectoryURL: URL
     private let legacyNoteURL: URL  // For migration
@@ -17,10 +18,12 @@ class NoteManager: ObservableObject {
     }
 
     private init() {
-        let appSupport = FileManager.default.urls(
+        guard let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first!
+        ).first else {
+            fatalError("Cannot access Application Support directory")
+        }
         let macViberDir = appSupport.appendingPathComponent("MacViber")
 
         self.notesDirectoryURL = macViberDir.appendingPathComponent("notes")
@@ -151,7 +154,9 @@ class NoteManager: ObservableObject {
 
         do {
             try note.content.write(to: fileURL, atomically: true, encoding: .utf8)
+            lastSaveError = nil
         } catch {
+            lastSaveError = error
             Logger.shared.error("Failed to save note \(note.id): \(error)")
         }
     }

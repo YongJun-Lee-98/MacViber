@@ -48,10 +48,12 @@ struct TerminalPaneView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .padding(1)
             .overlay(
-                Rectangle()
-                    .stroke(isFocused ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isFocused ? Color.blue.opacity(0.5) : Color.clear, lineWidth: 2)
             )
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .onHover { isHovered = $0 }
         }
     }

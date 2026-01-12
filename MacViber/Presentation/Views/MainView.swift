@@ -194,6 +194,12 @@ struct TerminalContainerView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .padding(1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.blue.opacity(0.5), lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     private var statusColor: Color {
