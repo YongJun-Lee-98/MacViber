@@ -95,6 +95,8 @@ struct TerminalPaneView: View {
                 onSplitHorizontal(geometry.size)
             }) {
                 Image(systemName: "rectangle.split.2x1")
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Split Horizontal (Cmd+D)")
@@ -104,6 +106,8 @@ struct TerminalPaneView: View {
                 onSplitVertical(geometry.size)
             }) {
                 Image(systemName: "rectangle.split.1x2")
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Split Vertical (Cmd+Shift+D)")
@@ -111,6 +115,8 @@ struct TerminalPaneView: View {
             // Minimize pane button
             Button(action: onMinimize) {
                 Image(systemName: "minus")
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Minimize Pane")

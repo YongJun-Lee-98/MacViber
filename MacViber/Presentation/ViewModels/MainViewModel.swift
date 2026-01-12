@@ -488,6 +488,9 @@ class MainViewModel: ObservableObject {
 
     /// Pane 최소화
     func minimizePane(_ paneId: UUID) {
+        guard isSplitViewActive else { return }
+        guard splitViewState.allPaneIds.contains(paneId) else { return }
+
         sessionManager.minimizePane(paneId)
 
         // 마지막 pane 최소화 시: split view 종료
