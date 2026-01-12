@@ -4,7 +4,7 @@ struct SplitTerminalView: View {
     let node: SplitNode
     @Binding var focusedPaneId: UUID?
     let onSplitPane: (UUID, SplitDirection, CGSize) -> Void
-    let onRemovePane: (UUID) -> Void
+    let onMinimizePane: (UUID) -> Void
 
     var body: some View {
         renderNode(node)
@@ -25,7 +25,7 @@ struct SplitTerminalView: View {
                 onSplitVertical: { size in
                     onSplitPane(paneId, .vertical, size)
                 },
-                onClose: { onRemovePane(paneId) }
+                onMinimize: { onMinimizePane(paneId) }
             )
 
         case .split(_, let direction, let first, let second, let ratio):
@@ -36,7 +36,7 @@ struct SplitTerminalView: View {
                 initialRatio: ratio,
                 focusedPaneId: $focusedPaneId,
                 onSplitPane: onSplitPane,
-                onRemovePane: onRemovePane
+                onMinimizePane: onMinimizePane
             )
         }
     }
@@ -51,7 +51,7 @@ struct SplitContainerView: View {
     let initialRatio: CGFloat
     @Binding var focusedPaneId: UUID?
     let onSplitPane: (UUID, SplitDirection, CGSize) -> Void
-    let onRemovePane: (UUID) -> Void
+    let onMinimizePane: (UUID) -> Void
 
     @State private var ratio: CGFloat
     @State private var isDragging = false
@@ -68,7 +68,7 @@ struct SplitContainerView: View {
         initialRatio: CGFloat,
         focusedPaneId: Binding<UUID?>,
         onSplitPane: @escaping (UUID, SplitDirection, CGSize) -> Void,
-        onRemovePane: @escaping (UUID) -> Void
+        onMinimizePane: @escaping (UUID) -> Void
     ) {
         self.direction = direction
         self.first = first
@@ -76,7 +76,7 @@ struct SplitContainerView: View {
         self.initialRatio = initialRatio
         self._focusedPaneId = focusedPaneId
         self.onSplitPane = onSplitPane
-        self.onRemovePane = onRemovePane
+        self.onMinimizePane = onMinimizePane
         self._ratio = State(initialValue: initialRatio)
     }
 
@@ -101,7 +101,7 @@ struct SplitContainerView: View {
                 node: first,
                 focusedPaneId: $focusedPaneId,
                 onSplitPane: onSplitPane,
-                onRemovePane: onRemovePane
+                onMinimizePane: onMinimizePane
             )
             .frame(width: firstWidth)
 
@@ -139,7 +139,7 @@ struct SplitContainerView: View {
                 node: second,
                 focusedPaneId: $focusedPaneId,
                 onSplitPane: onSplitPane,
-                onRemovePane: onRemovePane
+                onMinimizePane: onMinimizePane
             )
             .frame(width: secondWidth)
         }
@@ -156,7 +156,7 @@ struct SplitContainerView: View {
                 node: first,
                 focusedPaneId: $focusedPaneId,
                 onSplitPane: onSplitPane,
-                onRemovePane: onRemovePane
+                onMinimizePane: onMinimizePane
             )
             .frame(height: firstHeight)
 
@@ -194,7 +194,7 @@ struct SplitContainerView: View {
                 node: second,
                 focusedPaneId: $focusedPaneId,
                 onSplitPane: onSplitPane,
-                onRemovePane: onRemovePane
+                onMinimizePane: onMinimizePane
             )
             .frame(height: secondHeight)
         }
@@ -214,7 +214,7 @@ struct SplitContainerView: View {
         node: node,
         focusedPaneId: .constant(nil),
         onSplitPane: { _, _, _ in },
-        onRemovePane: { _ in }
+        onMinimizePane: { _ in }
     )
     .environmentObject(SessionManager.shared)
     .frame(width: 800, height: 600)

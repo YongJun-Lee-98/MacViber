@@ -60,6 +60,24 @@ struct TerminalListView: View {
                     }
                 }
             }
+
+            // Minimized Panes Section
+            if viewModel.hasMinimizedPanes {
+                Section("Minimized") {
+                    ForEach(viewModel.minimizedPanes) { pane in
+                        MinimizedPaneItemView(
+                            minimizedPane: pane,
+                            session: viewModel.session(for: pane),
+                            onRestore: {
+                                viewModel.restoreMinimizedPane(pane.id)
+                            },
+                            onClose: {
+                                viewModel.closeMinimizedPane(pane.id)
+                            }
+                        )
+                    }
+                }
+            }
         }
         .listStyle(.sidebar)
         .frame(minWidth: 200)

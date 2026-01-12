@@ -474,6 +474,60 @@ class MainViewModel: ObservableObject {
         removePane(paneId)
     }
 
+    // MARK: - Minimized Pane Management
+
+    /// 최소화된 Pane 목록
+    var minimizedPanes: [MinimizedPane] {
+        sessionManager.splitViewState.minimizedPanes
+    }
+
+    /// 최소화된 Pane이 있는지 여부
+    var hasMinimizedPanes: Bool {
+        sessionManager.splitViewState.hasMinimizedPanes
+    }
+
+    /// Pane 최소화
+    func minimizePane(_ paneId: UUID) {
+        sessionManager.minimizePane(paneId)
+
+        // 마지막 pane 최소화 시: split view 종료
+        if splitViewState.paneCount == 0 {
+            exitSplitView()
+            // selectedSessionId는 유지 (최소화된 pane의 세션)
+        } else if splitViewState.paneCount == 1 {
+            // 하나 남으면 split view 종료
+            exitSplitView()
+            if let sessionId = selectedSessionId,
+               let controller = sessionManager.controller(for: sessionId) {
+                DispatchQueue.main.async {
+                    controller.requestFocus()
+                }
+            }
+        } else {
+            // 다음 pane으로 포커스 이동
+            restoreFocusToActivePane()
+        }
+    }
+
+    /// 최소화된 Pane 복원
+    func restoreMinimizedPane(_ paneId: UUID) {
+        sessionManager.restoreMinimizedPane(paneId)
+
+        // 복원 후 포커스 이동
+        if let newFocusedId = splitViewState.focusedPaneId,
+           let sessionId = splitViewRoot?.sessionId(for: newFocusedId),
+           let controller = sessionManager.controller(for: sessionId) {
+            DispatchQueue.main.async {
+                controller.requestFocus()
+            }
+        }
+    }
+
+    /// 최소화된 Pane 완전 닫기
+    func closeMinimizedPane(_ paneId: UUID) {
+        sessionManager.closeMinimizedPane(paneId)
+    }
+
     func focusNextPane() {
         if let nextId = splitViewState.nextPaneId(after: focusedPaneId) {
             sessionManager.setFocusedPane(nextId)

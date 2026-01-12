@@ -14,6 +14,14 @@ class TerminalListViewModel: ObservableObject {
         set { sessionManager.selectedSessionId = newValue }
     }
 
+    var minimizedPanes: [MinimizedPane] {
+        sessionManager.splitViewState.minimizedPanes
+    }
+
+    var hasMinimizedPanes: Bool {
+        !minimizedPanes.isEmpty
+    }
+
     init(sessionManager: SessionManager = .shared) {
         self.sessionManager = sessionManager
 
@@ -60,5 +68,19 @@ class TerminalListViewModel: ObservableObject {
             let session = sessions[index]
             sessionManager.closeSession(session.id)
         }
+    }
+
+    // MARK: - Minimized Pane Methods
+
+    func session(for minimizedPane: MinimizedPane) -> TerminalSession? {
+        sessionManager.session(for: minimizedPane.sessionId)
+    }
+
+    func restoreMinimizedPane(_ paneId: UUID) {
+        sessionManager.restoreMinimizedPane(paneId)
+    }
+
+    func closeMinimizedPane(_ paneId: UUID) {
+        sessionManager.closeMinimizedPane(paneId)
     }
 }

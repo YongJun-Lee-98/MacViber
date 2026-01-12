@@ -64,8 +64,8 @@ struct MainView: View {
                 onSplitPane: { paneId, direction, size in
                     viewModel.splitPane(paneId, direction: direction, currentSize: size)
                 },
-                onRemovePane: { paneId in
-                    viewModel.removePane(paneId)
+                onMinimizePane: { paneId in
+                    viewModel.minimizePane(paneId)
                 }
             )
         } else if let session = viewModel.selectedSession {

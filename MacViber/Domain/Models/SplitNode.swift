@@ -90,6 +90,7 @@ struct SplitViewState: Equatable {
     var rootNode: SplitNode?
     var focusedPaneId: UUID?
     var maxPaneCount: Int = 9
+    var minimizedPanes: [MinimizedPane] = []
 
     var isActive: Bool {
         rootNode != nil
@@ -105,6 +106,19 @@ struct SplitViewState: Equatable {
 
     var allPaneIds: [UUID] {
         rootNode?.allPaneIds ?? []
+    }
+
+    var hasMinimizedPanes: Bool {
+        !minimizedPanes.isEmpty
+    }
+
+    var minimizedPaneCount: Int {
+        minimizedPanes.count
+    }
+
+    /// 최소화된 pane들의 세션 ID 집합
+    var minimizedSessionIds: Set<UUID> {
+        Set(minimizedPanes.map { $0.sessionId })
     }
 
     /// Get the next pane ID in sequence (for navigation)

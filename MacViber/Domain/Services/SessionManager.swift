@@ -87,6 +87,11 @@ class SessionManager: ObservableObject {
             removePaneFromSplit(paneId)
         }
 
+        // 최소화된 pane에서도 해당 세션 제거
+        var newState = splitViewState
+        newState.minimizedPanes.removeAll { $0.sessionId == sessionId }
+        splitViewState = newState
+
         // Select another session if current was closed
         if selectedSessionId == sessionId {
             selectedSessionId = sessions.first?.id
@@ -316,7 +321,7 @@ class SessionManager: ObservableObject {
     /// Split view에 표시되지 않은 세션 중 가장 최근에 사용된 세션 반환
     func getUnusedSession() -> TerminalSession? {
         // 현재 split에 표시된 sessionId들 수집
-        let usedSessionIds: Set<UUID>
+        var usedSessionIds: Set<UUID>
         if let root = splitViewState.rootNode {
             usedSessionIds = Set(root.allSessionIds)
         } else if let selectedId = selectedSessionId {
@@ -324,6 +329,9 @@ class SessionManager: ObservableObject {
         } else {
             usedSessionIds = []
         }
+
+        // 최소화된 pane의 세션도 "사용 중"으로 간주
+        usedSessionIds.formUnion(splitViewState.minimizedSessionIds)
 
         // 미사용 세션 중 lastActivity 기준 최신 것 선택
         return sessions
@@ -456,6 +464,108 @@ class SessionManager: ObservableObject {
                 second: updateSessionInNode(second, paneId: paneId, newSessionId: newSessionId),
                 ratio: ratio
             )
+        }
+    }
+
+    // MARK: - Minimized Pane Management
+
+    /// Pane을 최소화 (Split에서 제거하고 minimizedPanes에 추가)
+    func minimizePane(_ paneId: UUID) {
+        guard let root = splitViewState.rootNode else { return }
+
+        // 1. 해당 pane의 sessionId 찾기
+        guard let sessionId = root.sessionId(for: paneId) else { return }
+
+        // 2. 부모 split 정보 찾기 (복원 시 위치 힌트용)
+        let parentInfo = findParentSplit(of: paneId, in: root)
+
+        // 3. MinimizedPane 생성
+        let minimizedPane = MinimizedPane(
+            paneId: paneId,
+            sessionId: sessionId,
+            parentSplitId: parentInfo?.splitId,
+            positionInParent: parentInfo?.position
+        )
+
+        // 4. Split 트리에서 제거
+        let result = removePane(from: root, paneId: paneId)
+
+        // 5. 상태 업데이트
+        var newState = splitViewState
+        newState.rootNode = result
+        newState.minimizedPanes.append(minimizedPane)
+
+        // 6. 포커스 업데이트
+        if newState.focusedPaneId == paneId {
+            newState.focusedPaneId = newState.allPaneIds.first
+        }
+
+        splitViewState = newState
+    }
+
+    /// 최소화된 Pane 복원
+    func restoreMinimizedPane(_ minimizedPaneId: UUID) {
+        guard let index = splitViewState.minimizedPanes.firstIndex(where: { $0.id == minimizedPaneId }) else { return }
+
+        let minimizedPane = splitViewState.minimizedPanes[index]
+
+        var newState = splitViewState
+
+        // minimizedPanes에서 제거
+        newState.minimizedPanes.remove(at: index)
+
+        if let root = newState.rootNode {
+            // Split view가 활성화된 경우: 새 pane으로 추가
+            let newPaneId = UUID()
+            let newNode = SplitNode.terminal(id: newPaneId, sessionId: minimizedPane.sessionId, size: nil)
+
+            // 기존 root를 horizontal split으로 감싸기
+            let newRoot = SplitNode.split(
+                id: UUID(),
+                direction: .horizontal,
+                first: root,
+                second: newNode,
+                ratio: 0.5
+            )
+
+            newState.rootNode = newRoot
+            newState.focusedPaneId = newPaneId
+        } else {
+            // Split view가 비활성화된 경우: 새 root로 설정
+            let newPaneId = UUID()
+            newState.rootNode = .terminal(id: newPaneId, sessionId: minimizedPane.sessionId, size: nil)
+            newState.focusedPaneId = newPaneId
+        }
+
+        splitViewState = newState
+    }
+
+    /// 최소화된 Pane 완전 닫기
+    func closeMinimizedPane(_ minimizedPaneId: UUID) {
+        var newState = splitViewState
+        newState.minimizedPanes.removeAll { $0.id == minimizedPaneId }
+        splitViewState = newState
+    }
+
+    /// 부모 split 정보 찾기 (복원 시 위치 힌트용)
+    private func findParentSplit(of paneId: UUID, in node: SplitNode) -> (splitId: UUID, position: Int)? {
+        switch node {
+        case .terminal:
+            return nil
+        case .split(let id, _, let first, let second, _):
+            // first가 해당 pane인 경우
+            if case .terminal(let termId, _, _) = first, termId == paneId {
+                return (id, 0)
+            }
+            // second가 해당 pane인 경우
+            if case .terminal(let termId, _, _) = second, termId == paneId {
+                return (id, 1)
+            }
+            // 재귀 탐색
+            if let result = findParentSplit(of: paneId, in: first) {
+                return result
+            }
+            return findParentSplit(of: paneId, in: second)
         }
     }
 

@@ -7,7 +7,7 @@ struct TerminalPaneView: View {
     let onFocus: () -> Void
     let onSplitHorizontal: (CGSize) -> Void
     let onSplitVertical: (CGSize) -> Void
-    let onClose: () -> Void
+    let onMinimize: () -> Void
 
     @EnvironmentObject var sessionManager: SessionManager
     @State private var isHovered = false
@@ -109,7 +109,7 @@ struct TerminalPaneView: View {
             .help("Split Vertical (Cmd+Shift+D)")
 
             // Minimize pane button
-            Button(action: onClose) {
+            Button(action: onMinimize) {
                 Image(systemName: "minus")
             }
             .buttonStyle(.plain)
