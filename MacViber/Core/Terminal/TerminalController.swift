@@ -79,6 +79,9 @@ class TerminalController: ObservableObject {
         termView.nativeBackgroundColor = themeManager.effectiveBackgroundColor
         termView.nativeForegroundColor = themeManager.effectiveForegroundColor
 
+        // Enable Metal GPU rendering for better performance
+        termView.useMetalRendering = true
+
         // Set up output capture callback
         termView.onOutput = { [weak self] output in
             self?.handleOutput(output)
@@ -374,10 +377,11 @@ class CustomTerminalView: LocalProcessTerminalView {
 
         // Cancel pending flush and schedule a new one
         outputFlushTask?.cancel()
-        outputFlushTask = DispatchWorkItem { [weak self] in
+        let task = DispatchWorkItem { [weak self] in
             self?.flushOutputBuffer()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + outputFlushDelay, execute: outputFlushTask!)
+        outputFlushTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + outputFlushDelay, execute: task)
     }
 
     private func flushOutputBuffer() {

@@ -14,6 +14,9 @@ import Foundation
 import AppKit
 import CoreText
 import CoreGraphics
+import Metal
+import QuartzCore
+import simd
 
 /**
  * TerminalView provides an AppKit front-end to the `Terminal` termininal emulator.
@@ -125,6 +128,28 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     /// https://developer.apple.com/forums/thread/663256?answerId=646653022#646653022
     public var disableFullRedrawOnAnyChanges = false
     var fontSet: FontSet
+
+    // MARK: - Metal Rendering
+
+    /// Metal 렌더러 (옵션)
+    private var metalRenderer: MetalTerminalRenderer?
+    private var metalLayer: CAMetalLayer?
+    private var _useMetalRendering = false
+
+    /// Metal GPU 가속 렌더링 활성화/비활성화
+    /// true로 설정하면 Metal 기반 렌더링을 사용하여 성능이 향상됩니다
+    public var useMetalRendering: Bool {
+        get { _useMetalRendering }
+        set {
+            guard newValue != _useMetalRendering else { return }
+            _useMetalRendering = newValue
+            if newValue {
+                enableMetalRendering()
+            } else {
+                disableMetalRendering()
+            }
+        }
+    }
 
     /// The font to use to render the terminal
     public var font: NSFont {
@@ -509,6 +534,12 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
     
     override open func draw (_ dirtyRect: NSRect) {
+        // Metal 렌더링이 활성화되어 있으면 Metal 렌더러에게 위임
+        if _useMetalRendering {
+            metalRenderer?.setNeedsDisplay()
+            return
+        }
+
         guard let currentContext = getCurrentGraphicsContext() else {
             return
         }
@@ -533,6 +564,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
             super.frame = newValue
             guard cellDimension != nil else { return }
             processSizeChange(newSize: newValue.size)
+            resizeMetalLayer()
             needsDisplay = true
             updateCursorPosition()
         }
@@ -1354,6 +1386,126 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     public func iTermContent (source: Terminal, content: ArraySlice<UInt8>) {
         terminalDelegate?.iTermContent(source: self, content: content)
     }
+
+    // MARK: - Metal Rendering Methods
+
+    /// Metal 렌더링 활성화
+    private func enableMetalRendering() {
+        guard metalRenderer == nil else { return }
+
+        // CAMetalLayer 생성
+        let layer = CAMetalLayer()
+        layer.frame = bounds
+        layer.contentsScale = window?.backingScaleFactor ?? 2.0
+        self.layer?.addSublayer(layer)
+        metalLayer = layer
+
+        do {
+            let renderer = try MetalTerminalRenderer(
+                layer: layer,
+                terminal: terminal,
+                cellDimension: CGSize(width: cellDimension.width, height: cellDimension.height),
+                scaleFactor: window?.backingScaleFactor ?? 2.0
+            )
+
+            // 폰트 설정
+            renderer.setFonts(
+                normal: fontSet.normal,
+                bold: fontSet.bold,
+                italic: fontSet.italic,
+                boldItalic: fontSet.boldItalic
+            )
+
+            // 색상 매핑 클로저 설정
+            renderer.colorMapper = { [weak self] color, isFg, isBold in
+                guard let self = self else { return simd_float4(1, 1, 1, 1) }
+                let nsColor = self.mapColorToNSColor(color: color, isFg: isFg, isBold: isBold)
+                return self.nsColorToFloat4(nsColor)
+            }
+
+            // 배경색 설정
+            renderer.backgroundColor = nsColorToFloat4(nativeBackgroundColor)
+
+            metalRenderer = renderer
+            debugLogger?("[METAL] Metal rendering enabled")
+        } catch {
+            debugLogger?("[METAL] Failed to initialize Metal renderer: \(error)")
+            _useMetalRendering = false
+            metalLayer?.removeFromSuperlayer()
+            metalLayer = nil
+        }
+    }
+
+    /// Metal 렌더링 비활성화
+    private func disableMetalRendering() {
+        metalRenderer = nil
+        metalLayer?.removeFromSuperlayer()
+        metalLayer = nil
+        needsDisplay = true
+        debugLogger?("[METAL] Metal rendering disabled")
+    }
+
+    /// NSColor를 simd_float4로 변환
+    private func nsColorToFloat4(_ color: NSColor) -> simd_float4 {
+        guard let rgb = color.usingColorSpace(.deviceRGB) else {
+            return simd_float4(1, 1, 1, 1)
+        }
+        return simd_float4(
+            Float(rgb.redComponent),
+            Float(rgb.greenComponent),
+            Float(rgb.blueComponent),
+            Float(rgb.alphaComponent)
+        )
+    }
+
+    /// 색상을 NSColor로 매핑
+    private func mapColorToNSColor(color: Attribute.Color, isFg: Bool, isBold: Bool) -> NSColor {
+        switch color {
+        case .defaultColor:
+            return isFg ? nativeForegroundColor : nativeBackgroundColor
+        case .defaultInvertedColor:
+            return isFg ? nativeBackgroundColor : nativeForegroundColor
+        case .ansi256(let code):
+            // ANSI 색상 인덱스 결정
+            var midx = Int(code)
+            if useBrightColors && code < 7 && isBold {
+                midx = Int(code) + 8
+            }
+            // 캐시된 색상 사용 또는 생성
+            if let c = colors[midx] {
+                return c
+            }
+            let tcolor = terminal.ansiColors[midx]
+            let newColor = TTColor.make(color: tcolor)
+            colors[midx] = newColor
+            return newColor
+        case .trueColor(let r, let g, let b):
+            return NSColor(red: CGFloat(r)/255.0, green: CGFloat(g)/255.0, blue: CGFloat(b)/255.0, alpha: 1.0)
+        }
+    }
+
+    /// Metal 렌더러에 업데이트 요청
+    public func metalSetNeedsDisplay() {
+        metalRenderer?.setNeedsDisplay()
+    }
+
+    /// Metal 렌더러 폰트 업데이트
+    private func updateMetalFonts() {
+        metalRenderer?.setFonts(
+            normal: fontSet.normal,
+            bold: fontSet.bold,
+            italic: fontSet.italic,
+            boldItalic: fontSet.boldItalic
+        )
+        metalRenderer?.updateCellDimension(CGSize(width: cellDimension.width, height: cellDimension.height))
+    }
+
+    /// Metal 레이어 리사이즈
+    private func resizeMetalLayer() {
+        guard let metalLayer = metalLayer else { return }
+        metalLayer.frame = bounds
+        metalRenderer?.resize(to: bounds.size)
+    }
 }
 
 
@@ -1379,4 +1531,5 @@ extension TerminalViewDelegate {
     public func iTermContent (source: TerminalView, content: ArraySlice<UInt8>) {
     }
 }
+
 #endif

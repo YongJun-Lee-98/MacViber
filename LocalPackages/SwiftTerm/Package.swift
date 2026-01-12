@@ -50,7 +50,10 @@ let targets: [Target] = [
         name: "SwiftTerm",
         dependencies: [],
         path: "Sources/SwiftTerm",
-        exclude: platformExcludes
+        exclude: platformExcludes,
+        resources: [
+            .process("Metal/TerminalShaders.metal")
+        ]
     ),
     .executableTarget (
         name: "SwiftTermFuzz",

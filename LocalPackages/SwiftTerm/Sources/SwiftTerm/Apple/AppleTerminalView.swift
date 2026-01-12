@@ -1140,10 +1140,12 @@ extension TerminalView {
         if terminal.isCurrentBufferAlternate {
             send (EscapeSequences.cmdPageUp)
         } else {
+            userScrolling = true
+            terminal.userScrolling = true
             scrollUp (lines: terminal.rows)
         }
     }
-    
+
     /// Scrolls the content of the terminal one page down
     public func pageDown ()
     {
@@ -1151,21 +1153,33 @@ extension TerminalView {
             send (EscapeSequences.cmdPageDown)
         } else {
             scrollDown (lines: terminal.rows)
+            // Check if we're at the bottom after scrolling down
+            let maxScrollback = terminal.buffer.lines.count - terminal.rows
+            let isAtBottom = terminal.buffer.yDisp >= maxScrollback - 1
+            userScrolling = !isAtBottom
+            terminal.userScrolling = !isAtBottom
         }
     }
-    
+
     /// Scrolls up the content of the terminal the specified number of lines
     public func scrollUp (lines: Int)
     {
+        userScrolling = true
+        terminal.userScrolling = true
         let newPosition = max (terminal.buffer.yDisp - lines, 0)
         scrollTo (row: newPosition)
     }
-    
+
     /// Scrolls down the content of the terminal the specified number of lines
     public func scrollDown (lines: Int)
     {
         let newPosition = max (0, min (terminal.buffer.yDisp + lines, terminal.buffer.lines.count - terminal.rows))
         scrollTo (row: newPosition)
+        // Check if we're at the bottom after scrolling down
+        let maxScrollback = terminal.buffer.lines.count - terminal.rows
+        let isAtBottom = terminal.buffer.yDisp >= maxScrollback - 1
+        userScrolling = !isAtBottom
+        terminal.userScrolling = !isAtBottom
     }
       
     func feedPrepare()
