@@ -18,6 +18,13 @@ typedef void *CoreHandle;
 
 typedef uint8_t SessionId[16];
 
+typedef struct SessionInfoFFI {
+  SessionId id;
+  int32_t status;
+  bool isLocked;
+  bool hasUnreadNotification;
+} SessionInfoFFI;
+
 typedef void (*OutputCallback)(const uint8_t*, uintptr_t, void*);
 
 typedef void *PatternMatcherHandle;
@@ -50,6 +57,18 @@ int32_t core_close_session(CoreHandle handle, const SessionId *session_id);
 int32_t core_session_count(CoreHandle handle);
 
 const char *core_version(void);
+
+int32_t core_rename_session(CoreHandle handle, const SessionId *session_id, const char *new_name);
+
+int32_t core_set_session_alias(CoreHandle handle, const SessionId *session_id, const char *alias);
+
+int32_t core_toggle_session_lock(CoreHandle handle, const SessionId *session_id);
+
+int32_t core_set_session_status(CoreHandle handle, const SessionId *session_id, int32_t status);
+
+int32_t core_get_session_info(CoreHandle handle, const SessionId *session_id, struct SessionInfoFFI *out_info);
+
+int32_t core_get_all_session_ids(CoreHandle handle, SessionId *out_ids, int32_t max_count);
 
 int32_t core_set_output_callback(CoreHandle _handle, const SessionId *_session_id, OutputCallback _callback, void *_context);
 

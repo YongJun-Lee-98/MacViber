@@ -33,6 +33,13 @@ typealias SplitViewStateClosePaneFunc = @convention(c) (OpaquePointer, UnsafeRaw
 typealias SplitViewStateGetFocusedFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer) -> Int32
 typealias SplitViewStateNextPaneFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer) -> Int32
 
+typealias CoreRenameSessionFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, UnsafePointer<CChar>) -> Int32
+typealias CoreSetSessionAliasFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, UnsafePointer<CChar>?) -> Int32
+typealias CoreToggleSessionLockFunc = @convention(c) (OpaquePointer, UnsafeRawPointer) -> Int32
+typealias CoreSetSessionStatusFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, Int32) -> Int32
+typealias CoreGetSessionInfoFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, UnsafeMutableRawPointer) -> Int32
+typealias CoreGetAllSessionIdsFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer, Int32) -> Int32
+
 struct PatternMatchResult {
     var matched: Bool
     var pattern_id: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
@@ -46,6 +53,14 @@ struct DetectionResult {
     var message: UnsafeMutablePointer<CChar>?
     var notification_id: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
                           UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)
+}
+
+struct SessionInfoFFI {
+    var id: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+             UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)
+    var status: Int32
+    var is_locked: Bool
+    var has_unread_notification: Bool
 }
 
 var libHandle: UnsafeMutableRawPointer!
@@ -95,6 +110,61 @@ func testCore() {
     }
     
     print("OK: Session count after create = \(countFn(core))")
+    
+    let renameFn: CoreRenameSessionFunc = loadSymbol("core_rename_session")
+    let renameResult = "TestTerminal".withCString { name in
+        withUnsafePointer(to: &sessionId) { ptr in
+            renameFn(core, ptr, name)
+        }
+    }
+    print("OK: core_rename_session() = \(renameResult)")
+    
+    let setAliasFn: CoreSetSessionAliasFunc = loadSymbol("core_set_session_alias")
+    let aliasResult = "MyAlias".withCString { alias in
+        withUnsafePointer(to: &sessionId) { ptr in
+            setAliasFn(core, ptr, alias)
+        }
+    }
+    print("OK: core_set_session_alias() = \(aliasResult)")
+    
+    let toggleLockFn: CoreToggleSessionLockFunc = loadSymbol("core_toggle_session_lock")
+    let lockResult = withUnsafePointer(to: &sessionId) { ptr in
+        toggleLockFn(core, ptr)
+    }
+    print("OK: core_toggle_session_lock() = \(lockResult)")
+    
+    let setStatusFn: CoreSetSessionStatusFunc = loadSymbol("core_set_session_status")
+    let statusResult = withUnsafePointer(to: &sessionId) { ptr in
+        setStatusFn(core, ptr, 2)
+    }
+    print("OK: core_set_session_status(WaitingForInput) = \(statusResult)")
+    
+    let getInfoFn: CoreGetSessionInfoFunc = loadSymbol("core_get_session_info")
+    var info = SessionInfoFFI(
+        id: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+        status: -1,
+        is_locked: false,
+        has_unread_notification: false
+    )
+    let infoResult = withUnsafePointer(to: &sessionId) { ptr in
+        getInfoFn(core, ptr, &info)
+    }
+    if infoResult == 0 {
+        let statusNames = ["Idle", "Running", "WaitingForInput", "Terminated"]
+        let statusName = info.status >= 0 && info.status < 4 ? statusNames[Int(info.status)] : "Unknown"
+        print("OK: core_get_session_info() - status=\(statusName), is_locked=\(info.is_locked)")
+    }
+    
+    let getAllIdsFn: CoreGetAllSessionIdsFunc = loadSymbol("core_get_all_session_ids")
+    var allIds = [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                   UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)](
+        repeating: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+        count: 10
+    )
+    let idsCount = allIds.withUnsafeMutableBufferPointer { buffer in
+        getAllIdsFn(core, buffer.baseAddress!, 10)
+    }
+    print("OK: core_get_all_session_ids() returned \(idsCount) session(s)")
     
     let closeFn: CloseSessionFunc = loadSymbol("core_close_session")
     let closeResult = withUnsafePointer(to: &sessionId) { ptr in

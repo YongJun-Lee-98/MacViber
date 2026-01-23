@@ -52,6 +52,58 @@ impl Core {
     pub fn session_count(&self) -> usize {
         self.sessions.read().len()
     }
+
+    pub fn get_session(&self, session_id: Uuid) -> Option<Session> {
+        self.sessions.read().get(&session_id).cloned()
+    }
+
+    pub fn get_all_session_ids(&self) -> Vec<Uuid> {
+        self.sessions.read().keys().copied().collect()
+    }
+
+    pub fn rename_session(&self, session_id: Uuid, new_name: String) -> Result<(), CoreError> {
+        let mut sessions = self.sessions.write();
+        let session = sessions
+            .get_mut(&session_id)
+            .ok_or(CoreError::SessionNotFound(session_id))?;
+        session.rename(new_name);
+        Ok(())
+    }
+
+    pub fn set_session_alias(
+        &self,
+        session_id: Uuid,
+        alias: Option<String>,
+    ) -> Result<(), CoreError> {
+        let mut sessions = self.sessions.write();
+        let session = sessions
+            .get_mut(&session_id)
+            .ok_or(CoreError::SessionNotFound(session_id))?;
+        session.set_alias(alias);
+        Ok(())
+    }
+
+    pub fn toggle_session_lock(&self, session_id: Uuid) -> Result<(), CoreError> {
+        let mut sessions = self.sessions.write();
+        let session = sessions
+            .get_mut(&session_id)
+            .ok_or(CoreError::SessionNotFound(session_id))?;
+        session.toggle_lock();
+        Ok(())
+    }
+
+    pub fn set_session_status(
+        &self,
+        session_id: Uuid,
+        status: SessionStatus,
+    ) -> Result<(), CoreError> {
+        let mut sessions = self.sessions.write();
+        let session = sessions
+            .get_mut(&session_id)
+            .ok_or(CoreError::SessionNotFound(session_id))?;
+        session.set_status(status);
+        Ok(())
+    }
 }
 
 impl Default for Core {

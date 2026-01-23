@@ -104,6 +104,165 @@ pub extern "C" fn core_version() -> *const c_char {
     VERSION.as_ptr() as *const c_char
 }
 
+#[no_mangle]
+pub extern "C" fn core_rename_session(
+    handle: CoreHandle,
+    session_id: *const SessionId,
+    new_name: *const c_char,
+) -> i32 {
+    if handle.is_null() || session_id.is_null() || new_name.is_null() {
+        return -1;
+    }
+
+    let core = unsafe { &*(handle as *const Core) };
+    let uuid = bytes_to_uuid(unsafe { &*session_id });
+    let name_str = unsafe { CStr::from_ptr(new_name).to_string_lossy().to_string() };
+
+    if core.rename_session(uuid, name_str).is_ok() {
+        0
+    } else {
+        -2
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn core_set_session_alias(
+    handle: CoreHandle,
+    session_id: *const SessionId,
+    alias: *const c_char,
+) -> i32 {
+    if handle.is_null() || session_id.is_null() {
+        return -1;
+    }
+
+    let core = unsafe { &*(handle as *const Core) };
+    let uuid = bytes_to_uuid(unsafe { &*session_id });
+    let alias_opt = if alias.is_null() {
+        None
+    } else {
+        let s = unsafe { CStr::from_ptr(alias).to_string_lossy().to_string() };
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    };
+
+    if core.set_session_alias(uuid, alias_opt).is_ok() {
+        0
+    } else {
+        -2
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn core_toggle_session_lock(
+    handle: CoreHandle,
+    session_id: *const SessionId,
+) -> i32 {
+    if handle.is_null() || session_id.is_null() {
+        return -1;
+    }
+
+    let core = unsafe { &*(handle as *const Core) };
+    let uuid = bytes_to_uuid(unsafe { &*session_id });
+
+    if core.toggle_session_lock(uuid).is_ok() {
+        0
+    } else {
+        -2
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn core_set_session_status(
+    handle: CoreHandle,
+    session_id: *const SessionId,
+    status: i32,
+) -> i32 {
+    if handle.is_null() || session_id.is_null() {
+        return -1;
+    }
+
+    let core = unsafe { &*(handle as *const Core) };
+    let uuid = bytes_to_uuid(unsafe { &*session_id });
+    let session_status = match status {
+        0 => crate::models::SessionStatus::Idle,
+        1 => crate::models::SessionStatus::Running,
+        2 => crate::models::SessionStatus::WaitingForInput,
+        3 => crate::models::SessionStatus::Terminated,
+        _ => return -3,
+    };
+
+    if core.set_session_status(uuid, session_status).is_ok() {
+        0
+    } else {
+        -2
+    }
+}
+
+#[repr(C)]
+pub struct SessionInfoFFI {
+    pub id: SessionId,
+    pub status: i32,
+    pub is_locked: bool,
+    pub has_unread_notification: bool,
+}
+
+#[no_mangle]
+pub extern "C" fn core_get_session_info(
+    handle: CoreHandle,
+    session_id: *const SessionId,
+    out_info: *mut SessionInfoFFI,
+) -> i32 {
+    if handle.is_null() || session_id.is_null() || out_info.is_null() {
+        return -1;
+    }
+
+    let core = unsafe { &*(handle as *const Core) };
+    let uuid = bytes_to_uuid(unsafe { &*session_id });
+
+    if let Some(session) = core.get_session(uuid) {
+        unsafe {
+            (*out_info).id = uuid_to_bytes(session.id);
+            (*out_info).status = match session.status {
+                crate::models::SessionStatus::Idle => 0,
+                crate::models::SessionStatus::Running => 1,
+                crate::models::SessionStatus::WaitingForInput => 2,
+                crate::models::SessionStatus::Terminated => 3,
+            };
+            (*out_info).is_locked = session.is_locked;
+            (*out_info).has_unread_notification = session.has_unread_notification;
+        }
+        0
+    } else {
+        -2
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn core_get_all_session_ids(
+    handle: CoreHandle,
+    out_ids: *mut SessionId,
+    max_count: i32,
+) -> i32 {
+    if handle.is_null() || out_ids.is_null() || max_count <= 0 {
+        return -1;
+    }
+
+    let core = unsafe { &*(handle as *const Core) };
+    let session_ids = core.get_all_session_ids();
+    let count = session_ids.len().min(max_count as usize);
+
+    for (i, id) in session_ids.iter().take(count).enumerate() {
+        unsafe {
+            *out_ids.add(i) = uuid_to_bytes(*id);
+        }
+    }
+
+    count as i32
+}
+
 pub type OutputCallback = extern "C" fn(*const u8, usize, *mut c_void);
 
 #[no_mangle]
