@@ -1,0 +1,4 @@
+module MacViberCore {
+    header "macviber_core.h"
+    export *
+}

@@ -41,3 +41,4 @@ MacViber.app
 # Claude Plans
 .claude/plans/
 
+core/target/
