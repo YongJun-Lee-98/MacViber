@@ -13,6 +13,7 @@ class SessionManager: ObservableObject {
 
     private var controllers: [UUID: TerminalController] = [:]
     private var cancellables = Set<AnyCancellable>()
+    private var sessionCancellables: [UUID: Set<AnyCancellable>] = [:]
     private var notificationsEnabled = false
     private let preferencesManager = NotificationPreferencesManager.shared
 
@@ -40,13 +41,15 @@ class SessionManager: ObservableObject {
 
         let controller = TerminalController(sessionId: session.id)
 
-        // Subscribe to notifications from this controller
+        // Subscribe to notifications from this controller (per-session cancellables to prevent memory leak)
+        var sessionSubs = Set<AnyCancellable>()
+        
         controller.notificationPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 self?.handleNotification(notification)
             }
-            .store(in: &cancellables)
+            .store(in: &sessionSubs)
 
         // Subscribe to running state changes (dropFirst to ignore initial false value)
         controller.$isRunning
@@ -55,7 +58,9 @@ class SessionManager: ObservableObject {
             .sink { [weak self] isRunning in
                 self?.updateSessionStatus(session.id, isRunning: isRunning)
             }
-            .store(in: &cancellables)
+            .store(in: &sessionSubs)
+        
+        sessionCancellables[session.id] = sessionSubs
 
         controllers[session.id] = controller
         sessions.append(session)
@@ -77,6 +82,7 @@ class SessionManager: ObservableObject {
     }
 
     func closeSession(_ sessionId: UUID) {
+        sessionCancellables.removeValue(forKey: sessionId)
         controllers[sessionId]?.terminate()
         controllers.removeValue(forKey: sessionId)
         sessions.removeAll { $0.id == sessionId }
@@ -675,6 +681,8 @@ class SessionManager: ObservableObject {
     func terminateAllSessions() {
         Logger.shared.info("Terminating all \(controllers.count) terminal sessions")
 
+        sessionCancellables.removeAll()
+        
         for (_, controller) in controllers {
             controller.terminate()
         }

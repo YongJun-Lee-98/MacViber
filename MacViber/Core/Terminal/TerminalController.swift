@@ -165,7 +165,11 @@ class TerminalController: ObservableObject {
     }
 
     func terminate() {
-        // Send exit command to gracefully terminate the shell
+        themeSubscription?.cancel()
+        themeSubscription = nil
+        colorsSubscription?.cancel()
+        colorsSubscription = nil
+        
         terminalView?.send(txt: "exit\n")
         isRunning = false
         terminalView = nil
