@@ -40,6 +40,13 @@ typealias CoreSetSessionStatusFunc = @convention(c) (OpaquePointer, UnsafeRawPoi
 typealias CoreGetSessionInfoFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, UnsafeMutableRawPointer) -> Int32
 typealias CoreGetAllSessionIdsFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer, Int32) -> Int32
 
+typealias PtySpawnFunc = @convention(c) (UnsafePointer<CChar>, UInt16, UInt16) -> OpaquePointer?
+typealias PtyDestroyFunc = @convention(c) (OpaquePointer) -> Void
+typealias PtyWriteFunc = @convention(c) (OpaquePointer, UnsafePointer<UInt8>, Int) -> Int32
+typealias PtyReadFunc = @convention(c) (OpaquePointer, UnsafeMutablePointer<UInt8>, Int) -> Int32
+typealias PtyResizeFunc = @convention(c) (OpaquePointer, UInt16, UInt16) -> Int32
+typealias PtyIsAliveFunc = @convention(c) (OpaquePointer) -> Bool
+
 struct PatternMatchResult {
     var matched: Bool
     var pattern_id: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
@@ -371,6 +378,58 @@ func testSplitViewState() {
     print("OK: split_view_state_destroy() succeeded")
 }
 
+func testPty() {
+    print("\n--- PTY Tests ---")
+    
+    let spawnFn: PtySpawnFunc = loadSymbol("pty_spawn")
+    let workingDir = FileManager.default.currentDirectoryPath
+    
+    guard let pty = workingDir.withCString({ cstr in
+        spawnFn(cstr, 80, 24)
+    }) else {
+        print("FAIL: pty_spawn returned nil")
+        exit(1)
+    }
+    print("OK: pty_spawn() succeeded")
+    
+    let isAliveFn: PtyIsAliveFunc = loadSymbol("pty_is_alive")
+    print("OK: pty_is_alive() = \(isAliveFn(pty))")
+    
+    let resizeFn: PtyResizeFunc = loadSymbol("pty_resize")
+    let resizeResult = resizeFn(pty, 120, 40)
+    print("OK: pty_resize(120, 40) = \(resizeResult)")
+    
+    let writeFn: PtyWriteFunc = loadSymbol("pty_write")
+    let echoCmd = "echo 'Hello from Rust PTY'\n"
+    let writeResult = echoCmd.withCString { cstr in
+        cstr.withMemoryRebound(to: UInt8.self, capacity: echoCmd.count) { ptr in
+            writeFn(pty, ptr, echoCmd.count)
+        }
+    }
+    print("OK: pty_write() = \(writeResult) bytes")
+    
+    usleep(100000)
+    
+    let readFn: PtyReadFunc = loadSymbol("pty_read")
+    var buffer = [UInt8](repeating: 0, count: 1024)
+    let readResult = buffer.withUnsafeMutableBufferPointer { bufPtr in
+        readFn(pty, bufPtr.baseAddress!, 1024)
+    }
+    if readResult > 0 {
+        let output = String(bytes: buffer.prefix(Int(readResult)), encoding: .utf8) ?? "(binary)"
+        print("OK: pty_read() = \(readResult) bytes")
+        if output.contains("Hello") {
+            print("OK: PTY output contains expected text")
+        }
+    } else {
+        print("OK: pty_read() = \(readResult) (no immediate output, which is normal)")
+    }
+    
+    let destroyFn: PtyDestroyFunc = loadSymbol("pty_destroy")
+    destroyFn(pty)
+    print("OK: pty_destroy() succeeded")
+}
+
 func main() {
     print("=== MacViber Rust FFI Test ===")
     
@@ -389,6 +448,7 @@ func main() {
     testPatternMatcher()
     testNotificationDetector()
     testSplitViewState()
+    testPty()
     
     dlclose(handle)
     

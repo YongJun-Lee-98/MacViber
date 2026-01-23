@@ -761,3 +761,88 @@ pub extern "C" fn split_view_state_get_all_pane_ids(
 
     count as i32
 }
+
+use crate::terminal::PtyHandle;
+
+pub type PtyHandlePtr = *mut c_void;
+
+#[no_mangle]
+pub extern "C" fn pty_spawn(working_dir: *const c_char, cols: u16, rows: u16) -> PtyHandlePtr {
+    if working_dir.is_null() {
+        return ptr::null_mut();
+    }
+
+    let dir_str = unsafe { CStr::from_ptr(working_dir).to_string_lossy() };
+
+    match PtyHandle::spawn(&*dir_str, cols, rows) {
+        Ok(pty) => Box::into_raw(Box::new(pty)) as PtyHandlePtr,
+        Err(e) => {
+            eprintln!("Failed to spawn PTY: {}", e);
+            ptr::null_mut()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pty_destroy(handle: PtyHandlePtr) {
+    if !handle.is_null() {
+        unsafe {
+            let mut pty = Box::from_raw(handle as *mut PtyHandle);
+            let _ = pty.terminate();
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pty_write(handle: PtyHandlePtr, data: *const u8, len: usize) -> i32 {
+    if handle.is_null() || data.is_null() {
+        return -1;
+    }
+
+    let pty = unsafe { &*(handle as *const PtyHandle) };
+    let slice = unsafe { std::slice::from_raw_parts(data, len) };
+
+    match pty.write(slice) {
+        Ok(written) => written as i32,
+        Err(_) => -2,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pty_read(handle: PtyHandlePtr, buf: *mut u8, buf_len: usize) -> i32 {
+    if handle.is_null() || buf.is_null() {
+        return -1;
+    }
+
+    let pty = unsafe { &*(handle as *const PtyHandle) };
+    let slice = unsafe { std::slice::from_raw_parts_mut(buf, buf_len) };
+
+    match pty.read(slice) {
+        Ok(read) => read as i32,
+        Err(_) => -2,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pty_resize(handle: PtyHandlePtr, cols: u16, rows: u16) -> i32 {
+    if handle.is_null() {
+        return -1;
+    }
+
+    let pty = unsafe { &*(handle as *const PtyHandle) };
+
+    match pty.resize(cols, rows) {
+        Ok(()) => 0,
+        Err(_) => -2,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pty_is_alive(handle: PtyHandlePtr) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+
+    let pty = unsafe { &mut *(handle as *mut PtyHandle) };
+    pty.is_alive()
+}

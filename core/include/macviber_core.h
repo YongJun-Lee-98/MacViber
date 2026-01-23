@@ -46,6 +46,8 @@ typedef struct DetectionResult {
 
 typedef void *SplitViewStateHandle;
 
+typedef void *PtyHandlePtr;
+
 CoreHandle core_init(void);
 
 void core_destroy(CoreHandle handle);
@@ -125,5 +127,17 @@ int32_t split_view_state_previous_pane(SplitViewStateHandle handle, SessionId *o
 int32_t split_view_state_get_session_for_pane(SplitViewStateHandle handle, const SessionId *pane_id, SessionId *out_session_id);
 
 int32_t split_view_state_get_all_pane_ids(SplitViewStateHandle handle, SessionId *out_ids, int32_t max_count);
+
+PtyHandlePtr pty_spawn(const char *working_dir, uint16_t cols, uint16_t rows);
+
+void pty_destroy(PtyHandlePtr handle);
+
+int32_t pty_write(PtyHandlePtr handle, const uint8_t *data, uintptr_t len);
+
+int32_t pty_read(PtyHandlePtr handle, uint8_t *buf, uintptr_t buf_len);
+
+int32_t pty_resize(PtyHandlePtr handle, uint16_t cols, uint16_t rows);
+
+bool pty_is_alive(PtyHandlePtr handle);
 
 #endif /* MACVIBER_CORE_H */
