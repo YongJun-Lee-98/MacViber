@@ -461,3 +461,274 @@ private func free_string(_ s: UnsafeMutablePointer<CChar>) {
     guard let sym = dlsym(dl, "free_string") else { return }
     unsafeBitCast(sym, to: FreeFunc.self)(s)
 }
+
+public final class RustSplitViewState {
+    private var handle: OpaquePointer?
+    
+    public init() {
+        handle = split_view_state_create()
+    }
+    
+    deinit {
+        if let h = handle {
+            split_view_state_destroy(h)
+        }
+    }
+    
+    public var isActive: Bool {
+        guard let h = handle else { return false }
+        return split_view_state_is_active(h)
+    }
+    
+    public var paneCount: Int {
+        guard let h = handle else { return 0 }
+        return Int(split_view_state_pane_count(h))
+    }
+    
+    public var canSplit: Bool {
+        guard let h = handle else { return false }
+        return split_view_state_can_split(h)
+    }
+    
+    public var focusedPaneId: UUID? {
+        guard let h = handle else { return nil }
+        var idBytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                      UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+        let result = withUnsafeMutablePointer(to: &idBytes) { ptr in
+            split_view_state_get_focused_pane_id(h, ptr)
+        }
+        guard result == 0 else { return nil }
+        return UUID(uuid: idBytes)
+    }
+    
+    public func enter(sessionId: UUID) -> Bool {
+        guard let h = handle else { return false }
+        var idBytes = sessionId.uuid
+        let result = withUnsafePointer(to: &idBytes) { ptr in
+            split_view_state_enter(h, ptr)
+        }
+        return result == 0
+    }
+    
+    public func exit() {
+        guard let h = handle else { return }
+        split_view_state_exit(h)
+    }
+    
+    func splitPane(
+        paneId: UUID,
+        direction: SplitDirection,
+        newSessionId: UUID,
+        width: CGFloat,
+        height: CGFloat
+    ) -> UUID? {
+        guard let h = handle else { return nil }
+        
+        var paneIdBytes = paneId.uuid
+        var sessionIdBytes = newSessionId.uuid
+        var outPaneIdBytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                             UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+        
+        let directionInt: Int32 = direction == .horizontal ? 0 : 1
+        
+        let result = withUnsafePointer(to: &paneIdBytes) { panePtr in
+            withUnsafePointer(to: &sessionIdBytes) { sessionPtr in
+                withUnsafeMutablePointer(to: &outPaneIdBytes) { outPtr in
+                    split_view_state_split_pane(h, panePtr, directionInt, sessionPtr, Double(width), Double(height), outPtr)
+                }
+            }
+        }
+        
+        guard result == 0 else { return nil }
+        return UUID(uuid: outPaneIdBytes)
+    }
+    
+    public func closePane(_ paneId: UUID) -> Bool {
+        guard let h = handle else { return false }
+        var idBytes = paneId.uuid
+        let result = withUnsafePointer(to: &idBytes) { ptr in
+            split_view_state_close_pane(h, ptr)
+        }
+        return result == 0
+    }
+    
+    public func setFocusedPaneId(_ paneId: UUID) {
+        guard let h = handle else { return }
+        var idBytes = paneId.uuid
+        withUnsafePointer(to: &idBytes) { ptr in
+            _ = split_view_state_set_focused_pane_id(h, ptr)
+        }
+    }
+    
+    public func nextPaneId() -> UUID? {
+        guard let h = handle else { return nil }
+        var idBytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                      UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+        let result = withUnsafeMutablePointer(to: &idBytes) { ptr in
+            split_view_state_next_pane(h, ptr)
+        }
+        guard result == 0 else { return nil }
+        return UUID(uuid: idBytes)
+    }
+    
+    public func previousPaneId() -> UUID? {
+        guard let h = handle else { return nil }
+        var idBytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                      UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+        let result = withUnsafeMutablePointer(to: &idBytes) { ptr in
+            split_view_state_previous_pane(h, ptr)
+        }
+        guard result == 0 else { return nil }
+        return UUID(uuid: idBytes)
+    }
+    
+    public func sessionId(for paneId: UUID) -> UUID? {
+        guard let h = handle else { return nil }
+        var paneIdBytes = paneId.uuid
+        var sessionIdBytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                             UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+        
+        let result = withUnsafePointer(to: &paneIdBytes) { panePtr in
+            withUnsafeMutablePointer(to: &sessionIdBytes) { sessionPtr in
+                split_view_state_get_session_for_pane(h, panePtr, sessionPtr)
+            }
+        }
+        
+        guard result == 0 else { return nil }
+        return UUID(uuid: sessionIdBytes)
+    }
+    
+    public var allPaneIds: [UUID] {
+        guard let h = handle else { return [] }
+        
+        let maxCount: Int32 = 16
+        var idBuffer = [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                         UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)](
+            repeating: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+            count: Int(maxCount)
+        )
+        
+        let count = idBuffer.withUnsafeMutableBufferPointer { buffer in
+            split_view_state_get_all_pane_ids(h, buffer.baseAddress!, maxCount)
+        }
+        
+        guard count > 0 else { return [] }
+        
+        return (0..<Int(count)).map { i in
+            UUID(uuid: idBuffer[i])
+        }
+    }
+}
+
+private func split_view_state_create() -> OpaquePointer? {
+    typealias CreateFunc = @convention(c) () -> OpaquePointer?
+    guard let dl = loadLibrary() else { return nil }
+    guard let sym = dlsym(dl, "split_view_state_create") else { return nil }
+    return unsafeBitCast(sym, to: CreateFunc.self)()
+}
+
+private func split_view_state_destroy(_ handle: OpaquePointer) {
+    typealias DestroyFunc = @convention(c) (OpaquePointer) -> Void
+    guard let dl = loadLibrary() else { return }
+    guard let sym = dlsym(dl, "split_view_state_destroy") else { return }
+    unsafeBitCast(sym, to: DestroyFunc.self)(handle)
+}
+
+private func split_view_state_is_active(_ handle: OpaquePointer) -> Bool {
+    typealias IsActiveFunc = @convention(c) (OpaquePointer) -> Bool
+    guard let dl = loadLibrary() else { return false }
+    guard let sym = dlsym(dl, "split_view_state_is_active") else { return false }
+    return unsafeBitCast(sym, to: IsActiveFunc.self)(handle)
+}
+
+private func split_view_state_pane_count(_ handle: OpaquePointer) -> Int32 {
+    typealias CountFunc = @convention(c) (OpaquePointer) -> Int32
+    guard let dl = loadLibrary() else { return 0 }
+    guard let sym = dlsym(dl, "split_view_state_pane_count") else { return 0 }
+    return unsafeBitCast(sym, to: CountFunc.self)(handle)
+}
+
+private func split_view_state_can_split(_ handle: OpaquePointer) -> Bool {
+    typealias CanSplitFunc = @convention(c) (OpaquePointer) -> Bool
+    guard let dl = loadLibrary() else { return false }
+    guard let sym = dlsym(dl, "split_view_state_can_split") else { return false }
+    return unsafeBitCast(sym, to: CanSplitFunc.self)(handle)
+}
+
+private func split_view_state_enter(_ handle: OpaquePointer, _ sessionId: UnsafeRawPointer) -> Int32 {
+    typealias EnterFunc = @convention(c) (OpaquePointer, UnsafeRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "split_view_state_enter") else { return -1 }
+    return unsafeBitCast(sym, to: EnterFunc.self)(handle, sessionId)
+}
+
+private func split_view_state_exit(_ handle: OpaquePointer) {
+    typealias ExitFunc = @convention(c) (OpaquePointer) -> Void
+    guard let dl = loadLibrary() else { return }
+    guard let sym = dlsym(dl, "split_view_state_exit") else { return }
+    unsafeBitCast(sym, to: ExitFunc.self)(handle)
+}
+
+private func split_view_state_split_pane(
+    _ handle: OpaquePointer,
+    _ paneId: UnsafeRawPointer,
+    _ direction: Int32,
+    _ newSessionId: UnsafeRawPointer,
+    _ width: Double,
+    _ height: Double,
+    _ outNewPaneId: UnsafeMutableRawPointer
+) -> Int32 {
+    typealias SplitFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, Int32, UnsafeRawPointer, Double, Double, UnsafeMutableRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "split_view_state_split_pane") else { return -1 }
+    return unsafeBitCast(sym, to: SplitFunc.self)(handle, paneId, direction, newSessionId, width, height, outNewPaneId)
+}
+
+private func split_view_state_close_pane(_ handle: OpaquePointer, _ paneId: UnsafeRawPointer) -> Int32 {
+    typealias CloseFunc = @convention(c) (OpaquePointer, UnsafeRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "split_view_state_close_pane") else { return -1 }
+    return unsafeBitCast(sym, to: CloseFunc.self)(handle, paneId)
+}
+
+private func split_view_state_get_focused_pane_id(_ handle: OpaquePointer, _ outPaneId: UnsafeMutableRawPointer) -> Int32 {
+    typealias GetFocusedFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "split_view_state_get_focused_pane_id") else { return -1 }
+    return unsafeBitCast(sym, to: GetFocusedFunc.self)(handle, outPaneId)
+}
+
+private func split_view_state_set_focused_pane_id(_ handle: OpaquePointer, _ paneId: UnsafeRawPointer) -> Int32 {
+    typealias SetFocusedFunc = @convention(c) (OpaquePointer, UnsafeRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "split_view_state_set_focused_pane_id") else { return -1 }
+    return unsafeBitCast(sym, to: SetFocusedFunc.self)(handle, paneId)
+}
+
+private func split_view_state_next_pane(_ handle: OpaquePointer, _ outPaneId: UnsafeMutableRawPointer) -> Int32 {
+    typealias NextFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "split_view_state_next_pane") else { return -1 }
+    return unsafeBitCast(sym, to: NextFunc.self)(handle, outPaneId)
+}
+
+private func split_view_state_previous_pane(_ handle: OpaquePointer, _ outPaneId: UnsafeMutableRawPointer) -> Int32 {
+    typealias PrevFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "split_view_state_previous_pane") else { return -1 }
+    return unsafeBitCast(sym, to: PrevFunc.self)(handle, outPaneId)
+}
+
+private func split_view_state_get_session_for_pane(_ handle: OpaquePointer, _ paneId: UnsafeRawPointer, _ outSessionId: UnsafeMutableRawPointer) -> Int32 {
+    typealias GetSessionFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, UnsafeMutableRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "split_view_state_get_session_for_pane") else { return -1 }
+    return unsafeBitCast(sym, to: GetSessionFunc.self)(handle, paneId, outSessionId)
+}
+
+private func split_view_state_get_all_pane_ids(_ handle: OpaquePointer, _ outIds: UnsafeMutableRawPointer, _ maxCount: Int32) -> Int32 {
+    typealias GetAllFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer, Int32) -> Int32
+    guard let dl = loadLibrary() else { return 0 }
+    guard let sym = dlsym(dl, "split_view_state_get_all_pane_ids") else { return 0 }
+    return unsafeBitCast(sym, to: GetAllFunc.self)(handle, outIds, maxCount)
+}

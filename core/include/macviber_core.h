@@ -37,6 +37,8 @@ typedef struct DetectionResult {
   SessionId notificationId;
 } DetectionResult;
 
+typedef void *SplitViewStateHandle;
+
 CoreHandle core_init(void);
 
 void core_destroy(CoreHandle handle);
@@ -74,5 +76,35 @@ int32_t notification_detector_detect(NotificationDetectorHandle handle, const ch
 void notification_detector_reset(NotificationDetectorHandle handle);
 
 void free_string(char *s);
+
+SplitViewStateHandle split_view_state_create(void);
+
+void split_view_state_destroy(SplitViewStateHandle handle);
+
+bool split_view_state_is_active(SplitViewStateHandle handle);
+
+int32_t split_view_state_pane_count(SplitViewStateHandle handle);
+
+bool split_view_state_can_split(SplitViewStateHandle handle);
+
+int32_t split_view_state_enter(SplitViewStateHandle handle, const SessionId *session_id);
+
+void split_view_state_exit(SplitViewStateHandle handle);
+
+int32_t split_view_state_split_pane(SplitViewStateHandle handle, const SessionId *pane_id, int32_t direction, const SessionId *new_session_id, double width, double height, SessionId *out_new_pane_id);
+
+int32_t split_view_state_close_pane(SplitViewStateHandle handle, const SessionId *pane_id);
+
+int32_t split_view_state_get_focused_pane_id(SplitViewStateHandle handle, SessionId *out_pane_id);
+
+int32_t split_view_state_set_focused_pane_id(SplitViewStateHandle handle, const SessionId *pane_id);
+
+int32_t split_view_state_next_pane(SplitViewStateHandle handle, SessionId *out_pane_id);
+
+int32_t split_view_state_previous_pane(SplitViewStateHandle handle, SessionId *out_pane_id);
+
+int32_t split_view_state_get_session_for_pane(SplitViewStateHandle handle, const SessionId *pane_id, SessionId *out_session_id);
+
+int32_t split_view_state_get_all_pane_ids(SplitViewStateHandle handle, SessionId *out_ids, int32_t max_count);
 
 #endif /* MACVIBER_CORE_H */

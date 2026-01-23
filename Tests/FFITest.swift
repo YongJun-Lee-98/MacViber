@@ -21,6 +21,18 @@ typealias NotificationDetectorDetectFunc = @convention(c) (OpaquePointer, Unsafe
 typealias NotificationDetectorResetFunc = @convention(c) (OpaquePointer) -> Void
 typealias FreeStringFunc = @convention(c) (UnsafeMutablePointer<CChar>) -> Void
 
+typealias SplitViewStateCreateFunc = @convention(c) () -> OpaquePointer?
+typealias SplitViewStateDestroyFunc = @convention(c) (OpaquePointer) -> Void
+typealias SplitViewStateIsActiveFunc = @convention(c) (OpaquePointer) -> Bool
+typealias SplitViewStatePaneCountFunc = @convention(c) (OpaquePointer) -> Int32
+typealias SplitViewStateCanSplitFunc = @convention(c) (OpaquePointer) -> Bool
+typealias SplitViewStateEnterFunc = @convention(c) (OpaquePointer, UnsafeRawPointer) -> Int32
+typealias SplitViewStateExitFunc = @convention(c) (OpaquePointer) -> Void
+typealias SplitViewStateSplitPaneFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, Int32, UnsafeRawPointer, Double, Double, UnsafeMutableRawPointer) -> Int32
+typealias SplitViewStateClosePaneFunc = @convention(c) (OpaquePointer, UnsafeRawPointer) -> Int32
+typealias SplitViewStateGetFocusedFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer) -> Int32
+typealias SplitViewStateNextPaneFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer) -> Int32
+
 struct PatternMatchResult {
     var matched: Bool
     var pattern_id: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
@@ -209,6 +221,86 @@ func testNotificationDetector() {
     print("OK: notification_detector_destroy() succeeded")
 }
 
+func testSplitViewState() {
+    print("\n--- SplitViewState Tests ---")
+    
+    let createFn: SplitViewStateCreateFunc = loadSymbol("split_view_state_create")
+    guard let state = createFn() else {
+        print("FAIL: split_view_state_create returned nil")
+        exit(1)
+    }
+    print("OK: split_view_state_create() succeeded")
+    
+    let isActiveFn: SplitViewStateIsActiveFunc = loadSymbol("split_view_state_is_active")
+    let paneCountFn: SplitViewStatePaneCountFunc = loadSymbol("split_view_state_pane_count")
+    let canSplitFn: SplitViewStateCanSplitFunc = loadSymbol("split_view_state_can_split")
+    
+    print("OK: isActive = \(isActiveFn(state)), paneCount = \(paneCountFn(state)), canSplit = \(canSplitFn(state))")
+    
+    let enterFn: SplitViewStateEnterFunc = loadSymbol("split_view_state_enter")
+    var sessionId = UUID().uuid
+    let enterResult = withUnsafePointer(to: &sessionId) { ptr in
+        enterFn(state, ptr)
+    }
+    print("OK: split_view_state_enter() = \(enterResult)")
+    print("OK: After enter - isActive = \(isActiveFn(state)), paneCount = \(paneCountFn(state))")
+    
+    let getFocusedFn: SplitViewStateGetFocusedFunc = loadSymbol("split_view_state_get_focused_pane_id")
+    var focusedPaneId: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+    let getFocusedResult = withUnsafeMutablePointer(to: &focusedPaneId) { ptr in
+        getFocusedFn(state, ptr)
+    }
+    if getFocusedResult == 0 {
+        print("OK: Focused pane = \(UUID(uuid: focusedPaneId))")
+    }
+    
+    let splitFn: SplitViewStateSplitPaneFunc = loadSymbol("split_view_state_split_pane")
+    var newSessionId = UUID().uuid
+    var newPaneId: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                    UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+    
+    let splitResult = withUnsafePointer(to: &focusedPaneId) { panePtr in
+        withUnsafePointer(to: &newSessionId) { sessionPtr in
+            withUnsafeMutablePointer(to: &newPaneId) { outPtr in
+                splitFn(state, panePtr, 0, sessionPtr, 800.0, 600.0, outPtr)
+            }
+        }
+    }
+    
+    if splitResult == 0 {
+        print("OK: split_view_state_split_pane() succeeded, newPaneId = \(UUID(uuid: newPaneId))")
+        print("OK: After split - paneCount = \(paneCountFn(state))")
+    } else {
+        print("FAIL: split_view_state_split_pane() returned \(splitResult)")
+        exit(1)
+    }
+    
+    let nextFn: SplitViewStateNextPaneFunc = loadSymbol("split_view_state_next_pane")
+    var nextPaneId: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                     UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+    let nextResult = withUnsafeMutablePointer(to: &nextPaneId) { ptr in
+        nextFn(state, ptr)
+    }
+    if nextResult == 0 {
+        print("OK: split_view_state_next_pane() = \(UUID(uuid: nextPaneId))")
+    }
+    
+    let closeFn: SplitViewStateClosePaneFunc = loadSymbol("split_view_state_close_pane")
+    let closeResult = withUnsafePointer(to: &newPaneId) { ptr in
+        closeFn(state, ptr)
+    }
+    print("OK: split_view_state_close_pane() = \(closeResult), paneCount = \(paneCountFn(state))")
+    
+    let exitFn: SplitViewStateExitFunc = loadSymbol("split_view_state_exit")
+    exitFn(state)
+    print("OK: split_view_state_exit() - isActive = \(isActiveFn(state))")
+    
+    let destroyFn: SplitViewStateDestroyFunc = loadSymbol("split_view_state_destroy")
+    destroyFn(state)
+    print("OK: split_view_state_destroy() succeeded")
+}
+
 func main() {
     print("=== MacViber Rust FFI Test ===")
     
@@ -226,6 +318,7 @@ func main() {
     testCore()
     testPatternMatcher()
     testNotificationDetector()
+    testSplitViewState()
     
     dlclose(handle)
     

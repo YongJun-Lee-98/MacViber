@@ -162,4 +162,175 @@ impl SplitNode {
             }
         }
     }
+
+    pub fn all_pane_ids(&self) -> Vec<Uuid> {
+        match self {
+            Self::Terminal { id, .. } => vec![*id],
+            Self::Split { first, second, .. } => {
+                let mut ids = first.all_pane_ids();
+                ids.extend(second.all_pane_ids());
+                ids
+            }
+        }
+    }
+
+    pub fn session_id_for_pane(&self, pane_id: Uuid) -> Option<Uuid> {
+        match self {
+            Self::Terminal { id, session_id, .. } => {
+                if *id == pane_id {
+                    Some(*session_id)
+                } else {
+                    None
+                }
+            }
+            Self::Split { first, second, .. } => first
+                .session_id_for_pane(pane_id)
+                .or_else(|| second.session_id_for_pane(pane_id)),
+        }
+    }
+
+    pub fn pane_id_for_session(&self, target_session_id: Uuid) -> Option<Uuid> {
+        match self {
+            Self::Terminal { id, session_id, .. } => {
+                if *session_id == target_session_id {
+                    Some(*id)
+                } else {
+                    None
+                }
+            }
+            Self::Split { first, second, .. } => first
+                .pane_id_for_session(target_session_id)
+                .or_else(|| second.pane_id_for_session(target_session_id)),
+        }
+    }
+
+    pub fn updating_session(&self, pane_id: Uuid, new_session_id: Uuid) -> Self {
+        match self {
+            Self::Terminal { id, size, .. } => {
+                if *id == pane_id {
+                    Self::Terminal {
+                        id: *id,
+                        session_id: new_session_id,
+                        size: size.clone(),
+                    }
+                } else {
+                    self.clone()
+                }
+            }
+            Self::Split {
+                id,
+                direction,
+                first,
+                second,
+                ratio,
+            } => Self::Split {
+                id: *id,
+                direction: *direction,
+                first: Box::new(first.updating_session(pane_id, new_session_id)),
+                second: Box::new(second.updating_session(pane_id, new_session_id)),
+                ratio: *ratio,
+            },
+        }
+    }
+
+    pub fn parent_split_info(&self, pane_id: Uuid) -> Option<(Uuid, i32)> {
+        match self {
+            Self::Terminal { .. } => None,
+            Self::Split {
+                id, first, second, ..
+            } => {
+                if let Self::Terminal { id: term_id, .. } = first.as_ref() {
+                    if *term_id == pane_id {
+                        return Some((*id, 0));
+                    }
+                }
+                if let Self::Terminal { id: term_id, .. } = second.as_ref() {
+                    if *term_id == pane_id {
+                        return Some((*id, 1));
+                    }
+                }
+                first
+                    .parent_split_info(pane_id)
+                    .or_else(|| second.parent_split_info(pane_id))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplitViewState {
+    pub root_node: Option<SplitNode>,
+    pub focused_pane_id: Option<Uuid>,
+    pub max_pane_count: usize,
+}
+
+impl SplitViewState {
+    pub fn new() -> Self {
+        Self {
+            root_node: None,
+            focused_pane_id: None,
+            max_pane_count: 9,
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.root_node.is_some()
+    }
+
+    pub fn pane_count(&self) -> usize {
+        self.root_node.as_ref().map(|n| n.pane_count()).unwrap_or(0)
+    }
+
+    pub fn can_split(&self) -> bool {
+        self.pane_count() < self.max_pane_count
+    }
+
+    pub fn all_pane_ids(&self) -> Vec<Uuid> {
+        self.root_node
+            .as_ref()
+            .map(|n| n.all_pane_ids())
+            .unwrap_or_default()
+    }
+
+    pub fn next_pane_id(&self, current_id: Option<Uuid>) -> Option<Uuid> {
+        let pane_ids = self.all_pane_ids();
+        if pane_ids.is_empty() {
+            return None;
+        }
+
+        if let Some(current) = current_id {
+            if let Some(idx) = pane_ids.iter().position(|&id| id == current) {
+                let next_idx = (idx + 1) % pane_ids.len();
+                return Some(pane_ids[next_idx]);
+            }
+        }
+
+        pane_ids.first().copied()
+    }
+
+    pub fn previous_pane_id(&self, current_id: Option<Uuid>) -> Option<Uuid> {
+        let pane_ids = self.all_pane_ids();
+        if pane_ids.is_empty() {
+            return None;
+        }
+
+        if let Some(current) = current_id {
+            if let Some(idx) = pane_ids.iter().position(|&id| id == current) {
+                let prev_idx = if idx == 0 {
+                    pane_ids.len() - 1
+                } else {
+                    idx - 1
+                };
+                return Some(pane_ids[prev_idx]);
+            }
+        }
+
+        pane_ids.last().copied()
+    }
+}
+
+impl Default for SplitViewState {
+    fn default() -> Self {
+        Self::new()
+    }
 }

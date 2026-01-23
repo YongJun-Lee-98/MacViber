@@ -319,3 +319,286 @@ pub extern "C" fn free_string(s: *mut c_char) {
         }
     }
 }
+
+use crate::models::{PaneSize, SplitDirection, SplitNode, SplitViewState};
+
+pub type SplitViewStateHandle = *mut c_void;
+
+#[no_mangle]
+pub extern "C" fn split_view_state_create() -> SplitViewStateHandle {
+    Box::into_raw(Box::new(SplitViewState::new())) as SplitViewStateHandle
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_destroy(handle: SplitViewStateHandle) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle as *mut SplitViewState));
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_is_active(handle: SplitViewStateHandle) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+    let state = unsafe { &*(handle as *const SplitViewState) };
+    state.is_active()
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_pane_count(handle: SplitViewStateHandle) -> i32 {
+    if handle.is_null() {
+        return 0;
+    }
+    let state = unsafe { &*(handle as *const SplitViewState) };
+    state.pane_count() as i32
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_can_split(handle: SplitViewStateHandle) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+    let state = unsafe { &*(handle as *const SplitViewState) };
+    state.can_split()
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_enter(
+    handle: SplitViewStateHandle,
+    session_id: *const SessionId,
+) -> i32 {
+    if handle.is_null() || session_id.is_null() {
+        return -1;
+    }
+
+    let state = unsafe { &mut *(handle as *mut SplitViewState) };
+    let uuid = bytes_to_uuid(unsafe { &*session_id });
+
+    let node = SplitNode::terminal(uuid);
+    let pane_id = node.id();
+    state.root_node = Some(node);
+    state.focused_pane_id = Some(pane_id);
+
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_exit(handle: SplitViewStateHandle) {
+    if handle.is_null() {
+        return;
+    }
+
+    let state = unsafe { &mut *(handle as *mut SplitViewState) };
+    state.root_node = None;
+    state.focused_pane_id = None;
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_split_pane(
+    handle: SplitViewStateHandle,
+    pane_id: *const SessionId,
+    direction: i32,
+    new_session_id: *const SessionId,
+    width: f64,
+    height: f64,
+    out_new_pane_id: *mut SessionId,
+) -> i32 {
+    if handle.is_null()
+        || pane_id.is_null()
+        || new_session_id.is_null()
+        || out_new_pane_id.is_null()
+    {
+        return -1;
+    }
+
+    let state = unsafe { &mut *(handle as *mut SplitViewState) };
+
+    if !state.can_split() {
+        return -2;
+    }
+
+    let Some(root) = &state.root_node else {
+        return -3;
+    };
+
+    let pane_uuid = bytes_to_uuid(unsafe { &*pane_id });
+    let new_session_uuid = bytes_to_uuid(unsafe { &*new_session_id });
+    let split_dir = if direction == 0 {
+        SplitDirection::Horizontal
+    } else {
+        SplitDirection::Vertical
+    };
+    let size = PaneSize::new(width, height);
+
+    let new_root = root.split(pane_uuid, split_dir, new_session_uuid, size);
+
+    let new_pane_id = new_root
+        .pane_id_for_session(new_session_uuid)
+        .unwrap_or_else(Uuid::new_v4);
+
+    unsafe {
+        *out_new_pane_id = uuid_to_bytes(new_pane_id);
+    }
+
+    state.root_node = Some(new_root);
+    state.focused_pane_id = Some(new_pane_id);
+
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_close_pane(
+    handle: SplitViewStateHandle,
+    pane_id: *const SessionId,
+) -> i32 {
+    if handle.is_null() || pane_id.is_null() {
+        return -1;
+    }
+
+    let state = unsafe { &mut *(handle as *mut SplitViewState) };
+    let pane_uuid = bytes_to_uuid(unsafe { &*pane_id });
+
+    let Some(root) = &state.root_node else {
+        return -2;
+    };
+
+    state.root_node = root.removing_pane(pane_uuid);
+
+    if state.focused_pane_id == Some(pane_uuid) {
+        state.focused_pane_id = state.all_pane_ids().first().copied();
+    }
+
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_get_focused_pane_id(
+    handle: SplitViewStateHandle,
+    out_pane_id: *mut SessionId,
+) -> i32 {
+    if handle.is_null() || out_pane_id.is_null() {
+        return -1;
+    }
+
+    let state = unsafe { &*(handle as *const SplitViewState) };
+
+    if let Some(pane_id) = state.focused_pane_id {
+        unsafe {
+            *out_pane_id = uuid_to_bytes(pane_id);
+        }
+        0
+    } else {
+        -2
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_set_focused_pane_id(
+    handle: SplitViewStateHandle,
+    pane_id: *const SessionId,
+) -> i32 {
+    if handle.is_null() || pane_id.is_null() {
+        return -1;
+    }
+
+    let state = unsafe { &mut *(handle as *mut SplitViewState) };
+    let pane_uuid = bytes_to_uuid(unsafe { &*pane_id });
+
+    state.focused_pane_id = Some(pane_uuid);
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_next_pane(
+    handle: SplitViewStateHandle,
+    out_pane_id: *mut SessionId,
+) -> i32 {
+    if handle.is_null() || out_pane_id.is_null() {
+        return -1;
+    }
+
+    let state = unsafe { &*(handle as *const SplitViewState) };
+
+    if let Some(next_id) = state.next_pane_id(state.focused_pane_id) {
+        unsafe {
+            *out_pane_id = uuid_to_bytes(next_id);
+        }
+        0
+    } else {
+        -2
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_previous_pane(
+    handle: SplitViewStateHandle,
+    out_pane_id: *mut SessionId,
+) -> i32 {
+    if handle.is_null() || out_pane_id.is_null() {
+        return -1;
+    }
+
+    let state = unsafe { &*(handle as *const SplitViewState) };
+
+    if let Some(prev_id) = state.previous_pane_id(state.focused_pane_id) {
+        unsafe {
+            *out_pane_id = uuid_to_bytes(prev_id);
+        }
+        0
+    } else {
+        -2
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_get_session_for_pane(
+    handle: SplitViewStateHandle,
+    pane_id: *const SessionId,
+    out_session_id: *mut SessionId,
+) -> i32 {
+    if handle.is_null() || pane_id.is_null() || out_session_id.is_null() {
+        return -1;
+    }
+
+    let state = unsafe { &*(handle as *const SplitViewState) };
+    let pane_uuid = bytes_to_uuid(unsafe { &*pane_id });
+
+    let Some(root) = &state.root_node else {
+        return -2;
+    };
+
+    if let Some(session_id) = root.session_id_for_pane(pane_uuid) {
+        unsafe {
+            *out_session_id = uuid_to_bytes(session_id);
+        }
+        0
+    } else {
+        -3
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn split_view_state_get_all_pane_ids(
+    handle: SplitViewStateHandle,
+    out_ids: *mut SessionId,
+    max_count: i32,
+) -> i32 {
+    if handle.is_null() || out_ids.is_null() || max_count <= 0 {
+        return -1;
+    }
+
+    let state = unsafe { &*(handle as *const SplitViewState) };
+    let pane_ids = state.all_pane_ids();
+    let count = pane_ids.len().min(max_count as usize);
+
+    for (i, id) in pane_ids.iter().take(count).enumerate() {
+        unsafe {
+            *out_ids.add(i) = uuid_to_bytes(*id);
+        }
+    }
+
+    count as i32
+}
