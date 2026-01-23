@@ -20,6 +20,23 @@ typedef uint8_t SessionId[16];
 
 typedef void (*OutputCallback)(const uint8_t*, uintptr_t, void*);
 
+typedef void *PatternMatcherHandle;
+
+typedef struct PatternMatchResult {
+  bool matched;
+  SessionId patternId;
+  bool autoPin;
+} PatternMatchResult;
+
+typedef void *NotificationDetectorHandle;
+
+typedef struct DetectionResult {
+  bool detected;
+  int32_t notificationType;
+  char *message;
+  SessionId notificationId;
+} DetectionResult;
+
 CoreHandle core_init(void);
 
 void core_destroy(CoreHandle handle);
@@ -35,5 +52,27 @@ const char *core_version(void);
 int32_t core_set_output_callback(CoreHandle _handle, const SessionId *_session_id, OutputCallback _callback, void *_context);
 
 int32_t core_send_input(CoreHandle _handle, const SessionId *_session_id, const uint8_t *_input, uintptr_t _len);
+
+PatternMatcherHandle pattern_matcher_create(void);
+
+void pattern_matcher_destroy(PatternMatcherHandle handle);
+
+int32_t pattern_matcher_add_pattern(PatternMatcherHandle handle, const SessionId *pattern_id, const char *name, const char *pattern, bool is_regex, bool is_enabled, bool auto_pin);
+
+int32_t pattern_matcher_remove_pattern(PatternMatcherHandle handle, const SessionId *pattern_id);
+
+int32_t pattern_matcher_match(PatternMatcherHandle handle, const char *text, struct PatternMatchResult *out_result);
+
+void pattern_matcher_invalidate_cache(PatternMatcherHandle handle);
+
+NotificationDetectorHandle notification_detector_create(void);
+
+void notification_detector_destroy(NotificationDetectorHandle handle);
+
+int32_t notification_detector_detect(NotificationDetectorHandle handle, const char *text, const SessionId *session_id, struct DetectionResult *out_result);
+
+void notification_detector_reset(NotificationDetectorHandle handle);
+
+void free_string(char *s);
 
 #endif /* MACVIBER_CORE_H */
