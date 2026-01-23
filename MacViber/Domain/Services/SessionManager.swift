@@ -358,119 +358,50 @@ class SessionManager: ObservableObject {
     }
 
     func splitPane(_ paneId: UUID, direction: SplitDirection, newSessionId: UUID, currentSize: CGSize) {
-        guard var root = splitViewState.rootNode else { return }
+        guard let root = splitViewState.rootNode else { return }
         guard splitViewState.canSplit else { return }
 
-        // 전달받은 크기 직접 사용
         let currentPaneSize = PaneSize(width: currentSize.width, height: currentSize.height)
-
-        // Split 후 각 pane의 예상 크기 계산
         let splitSize = currentPaneSize.half(for: direction)
 
-        // 최소 크기 검증
         guard splitSize.meetsMinimum() else {
             Logger.shared.warning("Split would result in panes smaller than minimum size")
             return
         }
 
         let newPaneId = UUID()
-        root = performSplit(on: root, paneId: paneId, direction: direction,
-                           newSessionId: newSessionId, newPaneId: newPaneId,
-                           splitSize: splitSize)
+        let newRoot = root.split(
+            paneId: paneId,
+            direction: direction,
+            newSessionId: newSessionId,
+            newPaneId: newPaneId,
+            splitSize: splitSize
+        )
 
         var newState = splitViewState
-        newState.rootNode = root
+        newState.rootNode = newRoot
         newState.focusedPaneId = newPaneId
         splitViewState = newState
-    }
-
-    private func performSplit(on node: SplitNode, paneId: UUID, direction: SplitDirection, newSessionId: UUID, newPaneId: UUID, splitSize: PaneSize) -> SplitNode {
-        switch node {
-        case .terminal(let id, let sessionId, _):
-            if id == paneId {
-                // Found the pane to split
-                // 원본 터미널과 새 터미널 모두 split 후 크기로 설정
-                return .split(
-                    id: UUID(),
-                    direction: direction,
-                    first: .terminal(id: id, sessionId: sessionId, size: splitSize),
-                    second: .terminal(id: newPaneId, sessionId: newSessionId, size: splitSize),
-                    ratio: 0.5
-                )
-            }
-            return node
-
-        case .split(let id, let dir, let first, let second, let ratio):
-            return .split(
-                id: id,
-                direction: dir,
-                first: performSplit(on: first, paneId: paneId, direction: direction, newSessionId: newSessionId, newPaneId: newPaneId, splitSize: splitSize),
-                second: performSplit(on: second, paneId: paneId, direction: direction, newSessionId: newSessionId, newPaneId: newPaneId, splitSize: splitSize),
-                ratio: ratio
-            )
-        }
     }
 
     func removePaneFromSplit(_ paneId: UUID) {
         guard let root = splitViewState.rootNode else { return }
 
-        let result = removePane(from: root, paneId: paneId)
-
         var newState = splitViewState
-        newState.rootNode = result
+        newState.rootNode = root.removingPane(paneId)
 
-        // Update focused pane if needed
         if newState.focusedPaneId == paneId {
             newState.focusedPaneId = newState.allPaneIds.first
         }
         splitViewState = newState
     }
 
-    private func removePane(from node: SplitNode, paneId: UUID) -> SplitNode? {
-        switch node {
-        case .terminal(let id, _, _):
-            return id == paneId ? nil : node
-
-        case .split(let id, let direction, let first, let second, let ratio):
-            let newFirst = removePane(from: first, paneId: paneId)
-            let newSecond = removePane(from: second, paneId: paneId)
-
-            // If both children still exist, keep the split
-            if let f = newFirst, let s = newSecond {
-                return .split(id: id, direction: direction, first: f, second: s, ratio: ratio)
-            }
-            // If only one child remains, promote it
-            return newFirst ?? newSecond
-        }
-    }
-
     func updatePaneSession(_ paneId: UUID, newSessionId: UUID) {
         guard let root = splitViewState.rootNode else { return }
 
-        let updatedRoot = updateSessionInNode(root, paneId: paneId, newSessionId: newSessionId)
-
         var newState = splitViewState
-        newState.rootNode = updatedRoot
+        newState.rootNode = root.updatingSession(paneId: paneId, newSessionId: newSessionId)
         splitViewState = newState
-    }
-
-    private func updateSessionInNode(_ node: SplitNode, paneId: UUID, newSessionId: UUID) -> SplitNode {
-        switch node {
-        case .terminal(let id, _, let size):
-            if id == paneId {
-                return .terminal(id: id, sessionId: newSessionId, size: size)
-            }
-            return node
-
-        case .split(let id, let direction, let first, let second, let ratio):
-            return .split(
-                id: id,
-                direction: direction,
-                first: updateSessionInNode(first, paneId: paneId, newSessionId: newSessionId),
-                second: updateSessionInNode(second, paneId: paneId, newSessionId: newSessionId),
-                ratio: ratio
-            )
-        }
     }
 
     // MARK: - Minimized Pane Management
@@ -483,7 +414,7 @@ class SessionManager: ObservableObject {
         guard let sessionId = root.sessionId(for: paneId) else { return }
 
         // 2. 부모 split 정보 찾기 (복원 시 위치 힌트용)
-        let parentInfo = findParentSplit(of: paneId, in: root)
+        let parentInfo = root.parentSplitInfo(of: paneId)
 
         // 3. MinimizedPane 생성
         let minimizedPane = MinimizedPane(
@@ -494,7 +425,7 @@ class SessionManager: ObservableObject {
         )
 
         // 4. Split 트리에서 제거
-        let result = removePane(from: root, paneId: paneId)
+        let result = root.removingPane(paneId)
 
         // 5. 상태 업데이트
         var newState = splitViewState
@@ -553,28 +484,6 @@ class SessionManager: ObservableObject {
         splitViewState = newState
     }
 
-    /// 부모 split 정보 찾기 (복원 시 위치 힌트용)
-    private func findParentSplit(of paneId: UUID, in node: SplitNode) -> (splitId: UUID, position: Int)? {
-        switch node {
-        case .terminal:
-            return nil
-        case .split(let id, _, let first, let second, _):
-            // first가 해당 pane인 경우
-            if case .terminal(let termId, _, _) = first, termId == paneId {
-                return (id, 0)
-            }
-            // second가 해당 pane인 경우
-            if case .terminal(let termId, _, _) = second, termId == paneId {
-                return (id, 1)
-            }
-            // 재귀 탐색
-            if let result = findParentSplit(of: paneId, in: first) {
-                return result
-            }
-            return findParentSplit(of: paneId, in: second)
-        }
-    }
-
     func focusNextPane() {
         var newState = splitViewState
         newState.focusedPaneId = newState.nextPaneId(after: newState.focusedPaneId)
@@ -589,33 +498,18 @@ class SessionManager: ObservableObject {
 
     /// Find the pane ID that is currently displaying a specific session
     func findPaneIdForSession(_ sessionId: UUID) -> UUID? {
-        guard let root = splitViewState.rootNode else { return nil }
-        return findPaneInNode(root, sessionId: sessionId)
+        splitViewState.rootNode?.paneId(for: sessionId)
     }
 
-    private func findPaneInNode(_ node: SplitNode, sessionId: UUID) -> UUID? {
-        switch node {
-        case .terminal(let paneId, let nodeSessionId, _):
-            return nodeSessionId == sessionId ? paneId : nil
-        case .split(_, _, let first, let second, _):
-            if let found = findPaneInNode(first, sessionId: sessionId) {
-                return found
-            }
-            return findPaneInNode(second, sessionId: sessionId)
-        }
-    }
-
-    /// Swap sessions between two panes
     func swapPaneSessions(_ paneId1: UUID, _ paneId2: UUID) {
         guard let root = splitViewState.rootNode else { return }
 
-        // Get session IDs for both panes
         guard let sessionId1 = root.sessionId(for: paneId1),
               let sessionId2 = root.sessionId(for: paneId2) else { return }
 
-        // Update both panes with swapped sessions
-        var updatedRoot = updateSessionInNode(root, paneId: paneId1, newSessionId: sessionId2)
-        updatedRoot = updateSessionInNode(updatedRoot, paneId: paneId2, newSessionId: sessionId1)
+        let updatedRoot = root
+            .updatingSession(paneId: paneId1, newSessionId: sessionId2)
+            .updatingSession(paneId: paneId2, newSessionId: sessionId1)
 
         var newState = splitViewState
         newState.rootNode = updatedRoot
