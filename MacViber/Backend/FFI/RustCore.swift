@@ -94,17 +94,71 @@ public final class RustCore {
     }
 }
 
+// MARK: - Dynamic Library Loading
+
+private var libraryHandle: UnsafeMutableRawPointer?
+
+private func loadLibrary() -> UnsafeMutableRawPointer? {
+    if let handle = libraryHandle {
+        return handle
+    }
+    
+    // Try multiple possible locations for the dylib
+    let possiblePaths = [
+        // Development: relative to project root
+        "core/target/release/libmacviber_core.dylib",
+        "core/target/debug/libmacviber_core.dylib",
+        // Installed: next to app bundle
+        Bundle.main.bundleURL.deletingLastPathComponent()
+            .appendingPathComponent("libmacviber_core.dylib").path,
+        // Inside app bundle Resources
+        Bundle.main.bundlePath + "/Contents/Resources/libmacviber_core.dylib",
+        // Inside app bundle Frameworks
+        Bundle.main.bundlePath + "/Contents/Frameworks/libmacviber_core.dylib",
+    ]
+    
+    for path in possiblePaths {
+        if let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL) {
+            print("[RustCore] Loaded library from: \(path)")
+            libraryHandle = handle
+            return handle
+        }
+    }
+    
+    // Try environment variable
+    if let envPath = ProcessInfo.processInfo.environment["MACVIBER_CORE_LIB"] {
+        if let handle = dlopen(envPath, RTLD_NOW | RTLD_LOCAL) {
+            print("[RustCore] Loaded library from env: \(envPath)")
+            libraryHandle = handle
+            return handle
+        }
+    }
+    
+    // Print error for debugging
+    if let error = dlerror() {
+        print("[RustCore] dlopen error: \(String(cString: error))")
+    }
+    
+    return nil
+}
+
 private func core_init() -> OpaquePointer? {
     typealias InitFunc = @convention(c) () -> OpaquePointer?
-    guard let handle = dlopen(nil, RTLD_NOW) else { return nil }
-    guard let sym = dlsym(handle, "core_init") else { return nil }
+    guard let handle = loadLibrary() else {
+        print("[RustCore] Failed to load library")
+        return nil
+    }
+    guard let sym = dlsym(handle, "core_init") else {
+        print("[RustCore] Symbol core_init not found")
+        return nil
+    }
     let fn = unsafeBitCast(sym, to: InitFunc.self)
     return fn()
 }
 
 private func core_destroy(_ handle: OpaquePointer) {
     typealias DestroyFunc = @convention(c) (OpaquePointer) -> Void
-    guard let dl = dlopen(nil, RTLD_NOW) else { return }
+    guard let dl = loadLibrary() else { return }
     guard let sym = dlsym(dl, "core_destroy") else { return }
     let fn = unsafeBitCast(sym, to: DestroyFunc.self)
     fn(handle)
@@ -112,7 +166,7 @@ private func core_destroy(_ handle: OpaquePointer) {
 
 private func core_version() -> UnsafePointer<CChar>? {
     typealias VersionFunc = @convention(c) () -> UnsafePointer<CChar>?
-    guard let handle = dlopen(nil, RTLD_NOW) else { return nil }
+    guard let handle = loadLibrary() else { return nil }
     guard let sym = dlsym(handle, "core_version") else { return nil }
     let fn = unsafeBitCast(sym, to: VersionFunc.self)
     return fn()
@@ -125,7 +179,7 @@ private func core_create_session(
                                           UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)>
 ) -> Int32 {
     typealias CreateFunc = @convention(c) (OpaquePointer, UnsafePointer<CChar>, UnsafeMutableRawPointer) -> Int32
-    guard let dl = dlopen(nil, RTLD_NOW) else { return -1 }
+    guard let dl = loadLibrary() else { return -1 }
     guard let sym = dlsym(dl, "core_create_session") else { return -1 }
     let fn = unsafeBitCast(sym, to: CreateFunc.self)
     return fn(handle, workingDir, outSessionId)
@@ -137,7 +191,7 @@ private func core_close_session(
                                 UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)>
 ) -> Int32 {
     typealias CloseFunc = @convention(c) (OpaquePointer, UnsafeRawPointer) -> Int32
-    guard let dl = dlopen(nil, RTLD_NOW) else { return -1 }
+    guard let dl = loadLibrary() else { return -1 }
     guard let sym = dlsym(dl, "core_close_session") else { return -1 }
     let fn = unsafeBitCast(sym, to: CloseFunc.self)
     return fn(handle, sessionId)
@@ -145,7 +199,7 @@ private func core_close_session(
 
 private func core_session_count(_ handle: OpaquePointer) -> Int32 {
     typealias CountFunc = @convention(c) (OpaquePointer) -> Int32
-    guard let dl = dlopen(nil, RTLD_NOW) else { return -1 }
+    guard let dl = loadLibrary() else { return -1 }
     guard let sym = dlsym(dl, "core_session_count") else { return -1 }
     let fn = unsafeBitCast(sym, to: CountFunc.self)
     return fn(handle)
