@@ -92,6 +92,122 @@ public final class RustCore {
         let count = core_session_count(h)
         return max(0, Int(count))
     }
+    
+    public func renameSession(_ sessionId: UUID, newName: String) -> Bool {
+        guard let h = handle else { return false }
+        var bytes = sessionId.uuid
+        return newName.withCString { nameCStr in
+            withUnsafePointer(to: &bytes) { ptr in
+                core_rename_session(h, ptr, nameCStr) == 0
+            }
+        }
+    }
+    
+    public func setSessionAlias(_ sessionId: UUID, alias: String?) -> Bool {
+        guard let h = handle else { return false }
+        var bytes = sessionId.uuid
+        
+        if let alias = alias, !alias.isEmpty {
+            return alias.withCString { aliasCStr in
+                withUnsafePointer(to: &bytes) { ptr in
+                    core_set_session_alias(h, ptr, aliasCStr) == 0
+                }
+            }
+        } else {
+            return withUnsafePointer(to: &bytes) { ptr in
+                core_set_session_alias(h, ptr, nil) == 0
+            }
+        }
+    }
+    
+    public func toggleSessionLock(_ sessionId: UUID) -> Bool {
+        guard let h = handle else { return false }
+        var bytes = sessionId.uuid
+        return withUnsafePointer(to: &bytes) { ptr in
+            core_toggle_session_lock(h, ptr) == 0
+        }
+    }
+    
+    func setSessionStatus(_ sessionId: UUID, status: SessionStatus) -> Bool {
+        guard let h = handle else { return false }
+        var bytes = sessionId.uuid
+        let statusInt: Int32 = {
+            switch status {
+            case .idle: return 0
+            case .running: return 1
+            case .waitingForInput: return 2
+            case .terminated: return 3
+            }
+        }()
+        return withUnsafePointer(to: &bytes) { ptr in
+            core_set_session_status(h, ptr, statusInt) == 0
+        }
+    }
+    
+    struct SessionInfo {
+        let id: UUID
+        let status: SessionStatus
+        let isLocked: Bool
+        let hasUnreadNotification: Bool
+    }
+    
+    func getSessionInfo(_ sessionId: UUID) -> SessionInfo? {
+        guard let h = handle else { return nil }
+        var bytes = sessionId.uuid
+        var info = SessionInfoFFI()
+        
+        let result = withUnsafePointer(to: &bytes) { ptr in
+            core_get_session_info(h, ptr, &info)
+        }
+        
+        guard result == 0 else { return nil }
+        
+        let status: SessionStatus = {
+            switch info.status {
+            case 0: return .idle
+            case 1: return .running
+            case 2: return .waitingForInput
+            case 3: return .terminated
+            default: return .idle
+            }
+        }()
+        
+        return SessionInfo(
+            id: UUID(uuid: info.id),
+            status: status,
+            isLocked: info.is_locked,
+            hasUnreadNotification: info.has_unread_notification
+        )
+    }
+    
+    public var allSessionIds: [UUID] {
+        guard let h = handle else { return [] }
+        
+        let maxCount: Int32 = 64
+        var idBuffer = [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                         UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)](
+            repeating: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+            count: Int(maxCount)
+        )
+        
+        let count = idBuffer.withUnsafeMutableBufferPointer { buffer in
+            core_get_all_session_ids(h, buffer.baseAddress!, maxCount)
+        }
+        
+        guard count > 0 else { return [] }
+        
+        return (0..<Int(count)).map { i in
+            UUID(uuid: idBuffer[i])
+        }
+    }
+}
+
+private struct SessionInfoFFI {
+    var id: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+             UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+    var status: Int32 = -1
+    var is_locked: Bool = false
+    var has_unread_notification: Bool = false
 }
 
 // MARK: - Dynamic Library Loading
@@ -203,6 +319,48 @@ private func core_session_count(_ handle: OpaquePointer) -> Int32 {
     guard let sym = dlsym(dl, "core_session_count") else { return -1 }
     let fn = unsafeBitCast(sym, to: CountFunc.self)
     return fn(handle)
+}
+
+private func core_rename_session(_ handle: OpaquePointer, _ sessionId: UnsafeRawPointer, _ newName: UnsafePointer<CChar>) -> Int32 {
+    typealias RenameFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, UnsafePointer<CChar>) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "core_rename_session") else { return -1 }
+    return unsafeBitCast(sym, to: RenameFunc.self)(handle, sessionId, newName)
+}
+
+private func core_set_session_alias(_ handle: OpaquePointer, _ sessionId: UnsafeRawPointer, _ alias: UnsafePointer<CChar>?) -> Int32 {
+    typealias AliasFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, UnsafePointer<CChar>?) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "core_set_session_alias") else { return -1 }
+    return unsafeBitCast(sym, to: AliasFunc.self)(handle, sessionId, alias)
+}
+
+private func core_toggle_session_lock(_ handle: OpaquePointer, _ sessionId: UnsafeRawPointer) -> Int32 {
+    typealias ToggleLockFunc = @convention(c) (OpaquePointer, UnsafeRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "core_toggle_session_lock") else { return -1 }
+    return unsafeBitCast(sym, to: ToggleLockFunc.self)(handle, sessionId)
+}
+
+private func core_set_session_status(_ handle: OpaquePointer, _ sessionId: UnsafeRawPointer, _ status: Int32) -> Int32 {
+    typealias SetStatusFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, Int32) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "core_set_session_status") else { return -1 }
+    return unsafeBitCast(sym, to: SetStatusFunc.self)(handle, sessionId, status)
+}
+
+private func core_get_session_info(_ handle: OpaquePointer, _ sessionId: UnsafeRawPointer, _ outInfo: UnsafeMutablePointer<SessionInfoFFI>) -> Int32 {
+    typealias GetInfoFunc = @convention(c) (OpaquePointer, UnsafeRawPointer, UnsafeMutableRawPointer) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "core_get_session_info") else { return -1 }
+    return unsafeBitCast(sym, to: GetInfoFunc.self)(handle, sessionId, outInfo)
+}
+
+private func core_get_all_session_ids(_ handle: OpaquePointer, _ outIds: UnsafeMutableRawPointer, _ maxCount: Int32) -> Int32 {
+    typealias GetAllIdsFunc = @convention(c) (OpaquePointer, UnsafeMutableRawPointer, Int32) -> Int32
+    guard let dl = loadLibrary() else { return 0 }
+    guard let sym = dlsym(dl, "core_get_all_session_ids") else { return 0 }
+    return unsafeBitCast(sym, to: GetAllIdsFunc.self)(handle, outIds, maxCount)
 }
 
 public final class RustPatternMatcher {
@@ -731,4 +889,145 @@ private func split_view_state_get_all_pane_ids(_ handle: OpaquePointer, _ outIds
     guard let dl = loadLibrary() else { return 0 }
     guard let sym = dlsym(dl, "split_view_state_get_all_pane_ids") else { return 0 }
     return unsafeBitCast(sym, to: GetAllFunc.self)(handle, outIds, maxCount)
+}
+
+public final class RustPty {
+    private var handle: OpaquePointer?
+    private let readQueue = DispatchQueue(label: "com.macviber.pty.read", qos: .userInteractive)
+    private var isReading = false
+    
+    public var isAlive: Bool {
+        guard let h = handle else { return false }
+        return pty_is_alive(h)
+    }
+    
+    public init?(workingDirectory: String, cols: UInt16 = 80, rows: UInt16 = 24) {
+        handle = workingDirectory.withCString { cstr in
+            pty_spawn(cstr, cols, rows)
+        }
+        
+        if handle == nil {
+            return nil
+        }
+    }
+    
+    deinit {
+        terminate()
+    }
+    
+    public func write(_ data: Data) -> Int {
+        guard let h = handle else { return -1 }
+        return data.withUnsafeBytes { buffer in
+            guard let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                return -1
+            }
+            return Int(pty_write(h, ptr, buffer.count))
+        }
+    }
+    
+    public func write(_ string: String) -> Int {
+        guard let data = string.data(using: .utf8) else { return -1 }
+        return write(data)
+    }
+    
+    public func read(maxBytes: Int = 4096) -> Data? {
+        guard let h = handle else { return nil }
+        var buffer = [UInt8](repeating: 0, count: maxBytes)
+        let bytesRead = buffer.withUnsafeMutableBufferPointer { bufPtr in
+            pty_read(h, bufPtr.baseAddress!, maxBytes)
+        }
+        
+        if bytesRead > 0 {
+            return Data(buffer.prefix(Int(bytesRead)))
+        }
+        return nil
+    }
+    
+    public func resize(cols: UInt16, rows: UInt16) -> Bool {
+        guard let h = handle else { return false }
+        return pty_resize(h, cols, rows) == 0
+    }
+    
+    public func terminate() {
+        isReading = false
+        if let h = handle {
+            pty_destroy(h)
+            handle = nil
+        }
+    }
+    
+    public func startAsyncRead(onData: @escaping (Data) -> Void, onError: @escaping (Error?) -> Void) {
+        guard handle != nil else {
+            onError(nil)
+            return
+        }
+        
+        isReading = true
+        
+        readQueue.async { [weak self] in
+            while self?.isReading == true {
+                guard let data = self?.read(maxBytes: 8192) else {
+                    if self?.isAlive == false {
+                        self?.isReading = false
+                        DispatchQueue.main.async {
+                            onError(nil)
+                        }
+                        break
+                    }
+                    usleep(10000)
+                    continue
+                }
+                
+                DispatchQueue.main.async {
+                    onData(data)
+                }
+            }
+        }
+    }
+    
+    public func stopAsyncRead() {
+        isReading = false
+    }
+}
+
+private func pty_spawn(_ workingDir: UnsafePointer<CChar>, _ cols: UInt16, _ rows: UInt16) -> OpaquePointer? {
+    typealias SpawnFunc = @convention(c) (UnsafePointer<CChar>, UInt16, UInt16) -> OpaquePointer?
+    guard let dl = loadLibrary() else { return nil }
+    guard let sym = dlsym(dl, "pty_spawn") else { return nil }
+    return unsafeBitCast(sym, to: SpawnFunc.self)(workingDir, cols, rows)
+}
+
+private func pty_destroy(_ handle: OpaquePointer) {
+    typealias DestroyFunc = @convention(c) (OpaquePointer) -> Void
+    guard let dl = loadLibrary() else { return }
+    guard let sym = dlsym(dl, "pty_destroy") else { return }
+    unsafeBitCast(sym, to: DestroyFunc.self)(handle)
+}
+
+private func pty_write(_ handle: OpaquePointer, _ data: UnsafePointer<UInt8>, _ len: Int) -> Int32 {
+    typealias WriteFunc = @convention(c) (OpaquePointer, UnsafePointer<UInt8>, Int) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "pty_write") else { return -1 }
+    return unsafeBitCast(sym, to: WriteFunc.self)(handle, data, len)
+}
+
+private func pty_read(_ handle: OpaquePointer, _ buf: UnsafeMutablePointer<UInt8>, _ bufLen: Int) -> Int32 {
+    typealias ReadFunc = @convention(c) (OpaquePointer, UnsafeMutablePointer<UInt8>, Int) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "pty_read") else { return -1 }
+    return unsafeBitCast(sym, to: ReadFunc.self)(handle, buf, bufLen)
+}
+
+private func pty_resize(_ handle: OpaquePointer, _ cols: UInt16, _ rows: UInt16) -> Int32 {
+    typealias ResizeFunc = @convention(c) (OpaquePointer, UInt16, UInt16) -> Int32
+    guard let dl = loadLibrary() else { return -1 }
+    guard let sym = dlsym(dl, "pty_resize") else { return -1 }
+    return unsafeBitCast(sym, to: ResizeFunc.self)(handle, cols, rows)
+}
+
+private func pty_is_alive(_ handle: OpaquePointer) -> Bool {
+    typealias IsAliveFunc = @convention(c) (OpaquePointer) -> Bool
+    guard let dl = loadLibrary() else { return false }
+    guard let sym = dlsym(dl, "pty_is_alive") else { return false }
+    return unsafeBitCast(sym, to: IsAliveFunc.self)(handle)
 }
