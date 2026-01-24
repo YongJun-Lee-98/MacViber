@@ -219,18 +219,13 @@ private func loadLibrary() -> UnsafeMutableRawPointer? {
         return handle
     }
     
-    // Try multiple possible locations for the dylib
     let possiblePaths = [
-        // Development: relative to project root
-        "core/target/release/libmacviber_core.dylib",
-        "core/target/debug/libmacviber_core.dylib",
-        // Installed: next to app bundle
+        Bundle.main.bundlePath + "/Contents/Frameworks/libmacviber_core.dylib",
+        Bundle.main.bundlePath + "/Contents/Resources/libmacviber_core.dylib",
         Bundle.main.bundleURL.deletingLastPathComponent()
             .appendingPathComponent("libmacviber_core.dylib").path,
-        // Inside app bundle Resources
-        Bundle.main.bundlePath + "/Contents/Resources/libmacviber_core.dylib",
-        // Inside app bundle Frameworks
-        Bundle.main.bundlePath + "/Contents/Frameworks/libmacviber_core.dylib",
+        "core/target/release/libmacviber_core.dylib",
+        "core/target/debug/libmacviber_core.dylib",
     ]
     
     for path in possiblePaths {

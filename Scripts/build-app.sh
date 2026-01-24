@@ -79,6 +79,12 @@ APP_BUNDLE="$PROJECT_DIR/build/${APP_NAME}.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+
+# Rust paths
+RUST_DIR="$PROJECT_DIR/core"
+RUST_TARGET_DIR="$RUST_DIR/target/release"
+RUST_DYLIB="libmacviber_core.dylib"
 
 # Kill running app if exists
 echo "🛑 Checking for running $APP_NAME..."
@@ -95,23 +101,39 @@ rm -rf "$PROJECT_DIR/.build" 2>/dev/null || (sleep 1 && rm -rf "$PROJECT_DIR/.bu
 rm -rf "$PROJECT_DIR/build" 2>/dev/null || true
 rm -rf ~/Library/Caches/com.macviber.app 2>/dev/null || true
 
+echo "🔨 Building Rust core..."
+cd "$RUST_DIR"
+cargo build --release
+if [ $? -ne 0 ]; then
+    echo "❌ Rust build failed"
+    exit 1
+fi
+echo "✅ Rust core built successfully"
+
 echo "🔨 Building $APP_NAME..."
 
-# Create build directory
 mkdir -p "$PROJECT_DIR/build"
 
-# Build release binary
 cd "$PROJECT_DIR"
 swift build -c release
 
 echo "📦 Creating app bundle..."
 
-# Create bundle structure
 mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
+mkdir -p "$FRAMEWORKS_DIR"
 
-# Copy executable
 cp "$BUILD_DIR/$APP_NAME" "$MACOS_DIR/"
+
+if [ -f "$RUST_TARGET_DIR/$RUST_DYLIB" ]; then
+    echo "📦 Copying Rust dylib to Frameworks..."
+    cp "$RUST_TARGET_DIR/$RUST_DYLIB" "$FRAMEWORKS_DIR/"
+    
+    install_name_tool -id "@executable_path/../Frameworks/$RUST_DYLIB" "$FRAMEWORKS_DIR/$RUST_DYLIB"
+    echo "✅ Rust dylib embedded in app bundle"
+else
+    echo "⚠️  Rust dylib not found at $RUST_TARGET_DIR/$RUST_DYLIB"
+fi
 
 # Create Info.plist
 cat > "$CONTENTS_DIR/Info.plist" << EOF
