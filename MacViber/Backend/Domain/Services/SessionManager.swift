@@ -16,6 +16,9 @@ class SessionManager: ObservableObject {
     private var sessionCancellables: [UUID: Set<AnyCancellable>] = [:]
     private var notificationsEnabled = false
     private let preferencesManager = NotificationPreferencesManager.shared
+    
+    /// RustCore integration - session metadata sync
+    private let rustCore = RustCore.shared
 
     var unreadNotificationCount: Int {
         activeNotifications.filter { !$0.isRead }.count
@@ -27,6 +30,15 @@ class SessionManager: ObservableObject {
 
     private init() {
         requestNotificationPermission()
+        initializeRustCore()
+    }
+    
+    private func initializeRustCore() {
+        if rustCore.isInitialized {
+            Logger.shared.info("[SessionManager] RustCore initialized, version: \(rustCore.version)")
+        } else {
+            Logger.shared.warning("[SessionManager] RustCore failed to initialize - running in Swift-only mode")
+        }
     }
 
     // MARK: - Session Management
@@ -41,7 +53,6 @@ class SessionManager: ObservableObject {
 
         let controller = TerminalController(sessionId: session.id)
 
-        // Subscribe to notifications from this controller (per-session cancellables to prevent memory leak)
         var sessionSubs = Set<AnyCancellable>()
         
         controller.notificationPublisher
@@ -51,7 +62,6 @@ class SessionManager: ObservableObject {
             }
             .store(in: &sessionSubs)
 
-        // Subscribe to running state changes (dropFirst to ignore initial false value)
         controller.$isRunning
             .dropFirst()
             .receive(on: DispatchQueue.main)
@@ -65,7 +75,10 @@ class SessionManager: ObservableObject {
         controllers[session.id] = controller
         sessions.append(session)
 
-        // Auto-select if first session
+        if rustCore.isInitialized {
+            _ = rustCore.createSession(workingDirectory: workingDirectory.path)
+        }
+
         if sessions.count == 1 {
             selectedSessionId = session.id
         }
@@ -88,17 +101,18 @@ class SessionManager: ObservableObject {
         sessions.removeAll { $0.id == sessionId }
         activeNotifications.removeAll { $0.sessionId == sessionId }
 
-        // Split view에서 해당 세션의 pane 제거
+        if rustCore.isInitialized {
+            _ = rustCore.closeSession(sessionId)
+        }
+
         if let paneId = findPaneIdForSession(sessionId) {
             removePaneFromSplit(paneId)
         }
 
-        // 최소화된 pane에서도 해당 세션 제거
         var newState = splitViewState
         newState.minimizedPanes.removeAll { $0.sessionId == sessionId }
         splitViewState = newState
 
-        // Select another session if current was closed
         if selectedSessionId == sessionId {
             selectedSessionId = sessions.first?.id
         }
@@ -107,6 +121,9 @@ class SessionManager: ObservableObject {
     func renameSession(_ sessionId: UUID, newName: String) {
         if let index = sessions.firstIndex(where: { $0.id == sessionId }) {
             sessions[index].name = newName
+            if rustCore.isInitialized {
+                _ = rustCore.renameSession(sessionId, newName: newName)
+            }
         }
     }
 
@@ -121,25 +138,32 @@ class SessionManager: ObservableObject {
     func toggleSessionLock(_ sessionId: UUID) {
         if let index = sessions.firstIndex(where: { $0.id == sessionId }) {
             sessions[index].isLocked.toggle()
+            if rustCore.isInitialized {
+                _ = rustCore.toggleSessionLock(sessionId)
+            }
         }
     }
 
     func setSessionAlias(_ sessionId: UUID, alias: String?) {
         if let index = sessions.firstIndex(where: { $0.id == sessionId }) {
-            // Set to nil if empty string
-            sessions[index].alias = alias?.isEmpty == true ? nil : alias
+            let effectiveAlias = alias?.isEmpty == true ? nil : alias
+            sessions[index].alias = effectiveAlias
+            if rustCore.isInitialized {
+                _ = rustCore.setSessionAlias(sessionId, alias: effectiveAlias)
+            }
         }
     }
 
     private func updateSessionStatus(_ sessionId: UUID, isRunning: Bool) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
 
-        if isRunning {
-            sessions[index].status = .running
-        } else {
-            sessions[index].status = .terminated
-        }
+        let newStatus: SessionStatus = isRunning ? .running : .terminated
+        sessions[index].status = newStatus
         sessions[index].lastActivity = Date()
+        
+        if rustCore.isInitialized {
+            _ = rustCore.setSessionStatus(sessionId, status: newStatus)
+        }
     }
 
     // MARK: - Notification Management
